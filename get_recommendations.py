@@ -29,10 +29,12 @@ def get_recommendations(unavailable_clients: List[str] = None, unavailable_mas: 
     distances = get_distances()
     clients = get_clients()
     mas = get_mas()
+    
+    print(f"Using {len(clients)} clients and {len(mas)} MAS")
     experience_log = get_experience_log()
     
     date = datetime(2025, 3, 21)
-    vertretungen = get_vertretungen(date)
+    vertretungen = get_vertretungen(date)[:15]
     
     data_processor = DataProcessor(mas, clients, distances, experience_log)
     
@@ -64,13 +66,16 @@ def get_recommendations(unavailable_clients: List[str] = None, unavailable_mas: 
     
     # remove entries from mas_df where timeToSchool is empty
     mas_df = mas_df[mas_df["timeToSchool"] != {}].reset_index(drop=True)
-    
+    print(f"After filtering: {len(mas_df)} MAS and {len(clients_df)} clients")
     if unavailable_clients is not None:
         clients_df = clients_df[~clients_df["id"].isin(unavailable_clients)].reset_index(drop=True)
     if unavailable_mas is not None:
         mas_df = mas_df[~mas_df["id"].isin(unavailable_mas)].reset_index(drop=True)
     
-    
+    if len(mas_df) == 0 or len(clients_df) == 0:
+        output = {"assignment_info": [], "mas": mas_df.to_dict(orient="records"), "clients": clients_df.to_dict(orient="records")}
+        print("No MAS or clients available. Returning None.")
+        return None
     
     optimizer = Optimizer(mas_df, clients_df)
     optimizer.create_model()

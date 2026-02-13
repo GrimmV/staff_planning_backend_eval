@@ -13,6 +13,7 @@ feature_mapping_dr = {
     "school_experience": "Erfahrung mit der Schule",
     "priority": "Klienten-Priorität",
     "availability_gap": "Mitarbeiterverfügbarkeit in Tagen",
+    "ma_availability": "Zeitfenster des Mitarbeiters ist über vollen Zeitraum des Klienten",
 }
 
 name_mappings = load_name_mappings()
@@ -38,13 +39,11 @@ def gather_numeric_fields(items: List[Dict]) -> List[str]:
 
 def compute_basic_stats(values: List[float]) -> Dict[str, Any]:
     if not values:
-        return {"mittelwert": None, "median": None, "standardabweichung": None, "max": None, "min": None}
+        return {"durchschnitt": None, "max": None, "min": None}
     count = len(values)
     mean = statistics.mean(values)
-    median = statistics.median(values)
     max_value = max(values)
     min_value = min(values)
-    std = None
     if count >= 2:
         # sample standard deviation
         try:
@@ -53,8 +52,33 @@ def compute_basic_stats(values: List[float]) -> Dict[str, Any]:
             )  # population stdev is fine here; use stdev() if you prefer sample
         except Exception:
             std = None
-    return {"mittelwert": round(mean, 2), "median": round(median, 2), "standardabweichung": round(std, 2), "max": round(max_value, 2), "min": round(min_value, 2)}
+    return {"durchschnitt": round(mean, 2), "max": round(max_value, 2), "min": round(min_value, 2)}
 
+def compute_priority_stats(values: List[float]) -> Dict[str, Any]:
+    if not values:
+        return {"aufteilung": {"hoch": 0, "mittel": 0, "niedrig": 0}}
+    return {"aufteilung": {"hoch": values.count(1), "mittel": values.count(2), "niedrig": values.count(3)}}
+
+def compute_verfügbarkeit_stats(values: List[float]) -> Dict[str, Any]:
+    if not values:
+        return {"voller_zeitraum": 0, "teilweiser_zeitraum": 0, "durchschnittlich_fehlend": 0}
+    voller_zeitraum = [value for value in values if value >= 0]
+    teilweiser_zeitraum = [value for value in values if value < 0]
+    durchschnittlich_fehlend = statistics.mean(teilweiser_zeitraum) if len(teilweiser_zeitraum) > 0 else 0
+    return {"voller_zeitraum": len(voller_zeitraum), "teilweiser_zeitraum": len(teilweiser_zeitraum), "durchschnittlich_fehlend": durchschnittlich_fehlend}
+
+def compute_erfahrung_stats(values: List[float]) -> Dict[str, Any]:
+    if not values:
+        return {"mit_erfahrung": 0, "ohne_erfahrung": 0, "durchschnittlich_erfahrung": 0}
+    mit_erfahrung = [value for value in values if value > 0]
+    ohne_erfahrung = [value for value in values if value == 0]
+    durchschnittlich_erfahrung = statistics.mean(mit_erfahrung) if len(mit_erfahrung) > 0 else 0
+    return {"mit_erfahrung": len(mit_erfahrung), "ohne_erfahrung": len(ohne_erfahrung), "durchschnittlich_erfahrung": durchschnittlich_erfahrung}
+
+def compute_zeitfenster_stats(values: List[float]) -> Dict[str, Any]:
+    if not values:
+        return {"voller_zeitraum": 0, "teilweiser_zeitraum": 0}
+    return {"voller_zeitraum": values.count(True), "teilweiser_zeitraum": values.count(False)}
 
 def field_values(items: List[Dict], field: str) -> List[float]:
     vals = []
@@ -95,17 +119,28 @@ def analyze_added_removed(
         values_added = [item[field] for item in added]
         values_removed = [item[field] for item in removed]
 
-        stats_added = compute_basic_stats(values_added)
-        stats_removed = compute_basic_stats(values_removed)
+        if field == "ma_availability":
+            stats_added = compute_zeitfenster_stats(values_added)
+            stats_removed = compute_zeitfenster_stats(values_removed)
+        elif field == "priority":
+            stats_added = compute_priority_stats(values_added)
+            stats_removed = compute_priority_stats(values_removed)
+        elif field == "availability_gap":
+            stats_added = compute_verfügbarkeit_stats(values_added)
+            stats_removed = compute_verfügbarkeit_stats(values_removed)
+        elif field == "cl_experience":
+            stats_added = compute_erfahrung_stats(values_added)
+            stats_removed = compute_erfahrung_stats(values_removed)
+        elif field == "school_experience":
+            stats_added = compute_erfahrung_stats(values_added)
+            stats_removed = compute_erfahrung_stats(values_removed)
+        else:
+            stats_added = compute_basic_stats(values_added)
+            stats_removed = compute_basic_stats(values_removed)
 
         stats["felder"][description] = {
             "hinzugefügt": stats_added,
-            "entfernt": stats_removed,
-            "mittelwert_änderung_hinzugefügt_minus_entfernt": (
-                None
-                if (not values_added or not values_removed)
-                else round(statistics.mean(values_added) - statistics.mean(values_removed), 2)
-            ),
+            "entfernt": stats_removed
         }
 
     return {
