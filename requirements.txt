@@ -1,0 +1,6 @@
+instructor==1.14.5
+python-dotenv==1.2.1
+pandas
+cpmpy
+arize-phoenix==13.0.3
+opentelemetry-instrumentation-openai==0.52.3
