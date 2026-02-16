@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from get_recommendations import get_recommendations, prepare_output
 from calculate_diff import calculate_diff
 from cors_handling import _build_cors_preflight_response, _corsify_actual_response
+from evaluate_diff import evaluate_diff
 app = Flask(__name__)
 
 @app.route('/recommendations', methods=['POST', 'OPTIONS'])
@@ -39,7 +40,10 @@ def calculate_diff_endpoint():
         unavailable_clients = data.get('unavailable_clients', None)
         unavailable_mas = data.get('unavailable_mas', None)
         
-        result = calculate_diff(add_client=add_client, add_ma=add_ma, unavailable_clients=unavailable_clients, unavailable_mas=unavailable_mas)
+        result, new_mas = calculate_diff(add_client=add_client, add_ma=add_ma, unavailable_clients=unavailable_clients, unavailable_mas=unavailable_mas)
+        assessment = evaluate_diff(result, new_mas)
+        
+        result["assessment"] = assessment
         
         return _corsify_actual_response(jsonify(result))
             

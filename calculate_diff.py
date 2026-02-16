@@ -4,7 +4,9 @@ from id_handling.name_generator import load_name_mappings
 import statistics
 import json
 
-from get_recommendations import get_recommendations
+from get_recommendations import get_recommendations, get_mas_and_clients
+from llm_formatting.assignment_simple import assignment_simple
+from llm_formatting.assignment_simple import assignments_to_markdown
 
 
 feature_mapping_dr = {
@@ -96,7 +98,6 @@ def analyze_added_removed(
 
     added = []
     removed = []
-    all_keys = set(old_map.keys()) | set(new_map.keys())
     
     for k in old_map.keys():
         if k not in new_map.keys():
@@ -108,8 +109,8 @@ def analyze_added_removed(
     stats = {
         "felder": {},
         "anzahl": {
-            "alt": len(old),
-            "neu": len(new),
+            "gesamt_vorher": len(old),
+            "gesamt_nachher": len(new),
             "hinzugefügt": len(added),
             "entfernt": len(removed),
         },
@@ -144,13 +145,11 @@ def analyze_added_removed(
         }
 
     return {
-        "hinzugefügt": added,
-        "entfernt": removed,
         "stats": stats,
-    }
+    }, added, removed
 
 
-def calculate_diff(add_client: str, add_ma: str, unavailable_clients: List[str] = None, unavailable_mas: List[str] = None) -> Dict[str, Any]:
+def calculate_diff(add_client: str, add_ma: str, unavailable_clients: List[str] = None, unavailable_mas: List[str] = None, features: List[str] = None) -> Dict[str, Any]:
     """
     Calculate the difference between two recommendation snapshots and generate abnormality descriptions.
     
@@ -169,14 +168,30 @@ def calculate_diff(add_client: str, add_ma: str, unavailable_clients: List[str] 
     new_mas = unavailable_mas + [add_ma] if unavailable_mas is not None else [add_ma]
     
     results_old = get_recommendations(unavailable_clients, unavailable_mas)
+    for d in results_old["assignment_info"]["assigned_pairs"]:
+        if d["ma"] == add_ma:
+            results_old["assignment_info"]["assigned_pairs"].remove(d)
+            break
     results_new = get_recommendations(new_clients, new_mas)
-
-    analysis_result = analyze_added_removed(results_old["assignment_info"]["assigned_pairs"], results_new["assignment_info"]["assigned_pairs"])
     
-    return analysis_result
+    mas_old, clients_old = get_mas_and_clients(results_old)
+    mas_new, clients_new = get_mas_and_clients(results_new)
+
+    analysis_result, added, removed = analyze_added_removed(results_old["assignment_info"]["assigned_pairs"], results_new["assignment_info"]["assigned_pairs"])
+    
+    old_assignments = [assignment_simple(assignment["ma"], assignment["klient"], mas_old, clients_old) for assignment in removed]
+    new_assignments = [assignment_simple(assignment["ma"], assignment["klient"], mas_new, clients_new) for assignment in added]
+    
+    old_assignments_markdown = assignments_to_markdown(old_assignments)
+    new_assignments_markdown = assignments_to_markdown(new_assignments)
+    
+    analysis_result["vorher"] = old_assignments_markdown
+    analysis_result["nachher"] = new_assignments_markdown
+    
+    return analysis_result, list(mas_new.keys())
 
 
 if __name__ == "__main__":
     
-    analysis_result = calculate_diff("dc4f6682-5418-4e69-b08e-eded0d66b060", "f3bf2472-89c6-4bd0-bd31-b092a48a89c3")
+    analysis_result, _ = calculate_diff("dc4f6682-5418-4e69-b08e-eded0d66b060", "f3bf2472-89c6-4bd0-bd31-b092a48a89c3")
     print(json.dumps(analysis_result, indent=4))

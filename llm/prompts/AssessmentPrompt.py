@@ -16,6 +16,16 @@ ASSESSMENT_PROMPT = """
     - Deine Aufgabe ist, eine Bewertung der Lage abzugeben. 
     - Antworte in ganzen Sätzen aber schreib nicht mehr als notwendig, um die Lage darzustellen.
     
+    Priorisierung der Eigenschaften:
+    
+    1. Anzahl der versorgten Klienten
+    2. Anzahl der hoch priorisierten Klienten
+    3. Durchschnittliche Fahrtzeit und Ausreißer mit hoher Fahrtzeit
+    4. Mitarbeiter kann Klienten den ganzen Tag betreuen
+    4. Erfahrung mit Klienten
+    4. Erfahrung mit Schule
+    4. Mitarbeiter kann Klienten für alle Vertretungstage betreuen
+    
     Folgende Fragen sollst du beantworten (und nichts anderes):
     
     - Welche Konsequenzen hat die Veränderung insgesamt? -> Gibt es Besondere Beobachtungen?

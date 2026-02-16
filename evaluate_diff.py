@@ -3,33 +3,51 @@ from calculate_diff import calculate_diff
 from llm.helper.init_phoenix import init_phoenix
 from llm.prompts.AssessmentPrompt import ASSESSMENT_PROMPT
 from llm.response_models.Assessment import Assessment
+from typing import List
+from opentelemetry.trace import StatusCode
+from llm.helper.cache import retrieve_cached_result, cache_result
 
-def evaluate_diff(diff: Dict) -> Dict:
+def evaluate_diff(diff: Dict, new_mas: List[str]) -> Dict:
     
+    setting_str = f"diff: {diff}, new_mas: {new_mas}"
+    cached_result = retrieve_cached_result(setting_str)
+    if cached_result is not None:
+        print(f"Cached result found")
+        return cached_result
+
     client, tracer = init_phoenix(project_name="staff-planning-v2")
-    
+
     with tracer.start_as_current_span(
         "assessment", openinference_span_kind="agent"
     ) as span:
-        span.set_input(diff)
+        prompt = ASSESSMENT_PROMPT.format(
+                        plan_diff=f"vorher: {diff['vorher']}, nachher: {diff['nachher']}, statistiken: {diff['stats']}"
+                    )
+        span.set_input(prompt)
         response = client.chat.completions.create(
-            model="gpt-5-mini",
+            model="gpt-4.1-mini",
             messages=[
                 {
                     "role": "user",
-                    "content": ASSESSMENT_PROMPT.format(
-                        plan_diff=f"hinzugefügt: {diff['hinzugefügt']}, entfernt: {diff['entfernt']}"
-                    ),
+                    "content": prompt,
                 }
             ],
             response_model=Assessment,
+            validation_context={
+                "mas": new_mas,
+            }
         )
         span.set_output(response.model_dump())
+        span.set_status(StatusCode.OK)
         assessment = response.model_dump()
-    
+
+    cache_result(setting_str, assessment)
     return assessment
 
+
 if __name__ == "__main__":
-    diff = calculate_diff("dc4f6682-5418-4e69-b08e-eded0d66b060", "f3bf2472-89c6-4bd0-bd31-b092a48a89c3")
-    assessment = evaluate_diff(diff)
+    diff, new_mas = calculate_diff(
+        "dc4f6682-5418-4e69-b08e-eded0d66b060", "f3bf2472-89c6-4bd0-bd31-b092a48a89c3"
+    )
+    assessment = evaluate_diff(diff, new_mas)
     print(assessment)

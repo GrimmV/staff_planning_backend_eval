@@ -117,6 +117,24 @@ def prepare_output(output: Dict) -> Dict:
     
     return recommendations
 
+def get_mas_and_clients(output: Dict) -> Dict:
+    assignments = output["assignment_info"]["assigned_pairs"]
+    
+    mas = {}
+    clients = {}
+    
+    for assignment in assignments:
+        ma = assignment["ma"]
+        client = assignment["klient"]
+        
+        raw_ma = next((d for d in output["mas"] if d.get("id") == ma), None)
+        raw_client = next((d for d in output["clients"] if d.get("id") == client), None)
+        
+        mas[raw_ma["id"]] = ma_simple(raw_ma["name"], raw_ma)
+        clients[raw_client["id"]] = client_simple(raw_client["name"], raw_client)
+    
+    return mas, clients
+
 def find_alternatives(clients: List[Dict], ma: Dict, client_id: str):
     
     alternatives = []
@@ -158,4 +176,4 @@ def find_alternatives(clients: List[Dict], ma: Dict, client_id: str):
 if __name__ == "__main__":
     output = get_recommendations()
     prepared_output = prepare_output(output)
-    print(prepared_output)
+    print(output)
