@@ -28,8 +28,8 @@ def assignment_simple(ma_id, client_id, mas: Dict, clients: Dict) -> Dict:
         "mitarbeiter_tag_bis": float_to_time(ma["zeitfenster"][1]),
         "mitarbeiter_kann_vertreten_bis": ma["verfuegbar_bis"],
         "mitarbeiter_fahrtzeit": ma["schulen"][schule],
-        "mitarbeiter_erfahrung_mit_dem_klienten": klient_erfahrung + " Tage" if klient_erfahrung is not None else "Keine",
-        "mitarbeiter_erfahrung_mit_der_schule": schule_erfahrung + " Tage" if schule_erfahrung is not None else "Keine",
+        "mitarbeiter_erfahrung_mit_dem_klienten": str(klient_erfahrung) + " Tage" if klient_erfahrung is not None else "Keine",
+        "mitarbeiter_erfahrung_mit_der_schule": str(schule_erfahrung) + " Tage" if schule_erfahrung is not None else "Keine",
     }
     
     return assignment

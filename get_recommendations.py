@@ -16,9 +16,9 @@ from optimize.utils.caching import cache_result, retrieve_cached_result
 from frontend_formatting.ma_simple import ma_simple
 from frontend_formatting.client_simple import client_simple
 
-def get_recommendations(unavailable_clients: List[str] = None, unavailable_mas: List[str] = None):
+def get_recommendations(unavailable_clients: List[str] = None, unavailable_mas: List[str] = None, forced_ma: str = None, forced_client: str = None):
         
-    setting_str = f"unavailable_clients: {unavailable_clients}, unavailable_mas: {unavailable_mas}"
+    setting_str = f"unavailable_clients: {unavailable_clients}, unavailable_mas: {unavailable_mas}, forced_ma: {forced_ma}, forced_client: {forced_client}"
     cached_result = retrieve_cached_result(setting_str)
     if cached_result is not None:
         clients = len(cached_result["clients"])
@@ -34,7 +34,7 @@ def get_recommendations(unavailable_clients: List[str] = None, unavailable_mas: 
     experience_log = get_experience_log()
     
     date = datetime(2025, 3, 21)
-    vertretungen = get_vertretungen(date)[:15]
+    vertretungen = get_vertretungen(date)
     
     data_processor = DataProcessor(mas, clients, distances, experience_log)
     
@@ -77,7 +77,7 @@ def get_recommendations(unavailable_clients: List[str] = None, unavailable_mas: 
         print("No MAS or clients available. Returning None.")
         return None
     
-    optimizer = Optimizer(mas_df, clients_df)
+    optimizer = Optimizer(mas_df, clients_df, forced_ma=forced_ma, forced_client=forced_client)
     optimizer.create_model()
 
     objective_value = optimizer.solve_model()
@@ -137,6 +137,7 @@ def get_mas_and_clients(output: Dict) -> Dict:
 
 def find_alternatives(clients: List[Dict], ma: Dict, client_id: str):
     
+    print(ma)
     alternatives = []
     not_yet_tried = [client["id"] for client in clients if client["id"] != client_id]
     
@@ -162,14 +163,17 @@ def find_alternatives(clients: List[Dict], ma: Dict, client_id: str):
                 )
                 not_yet_tried.remove(raw_client["id"])
     
-    for client_id in not_yet_tried:
-        if len(alternatives) >= 3:
-            return alternatives
-        raw_client = next((d for d in clients if d.get("id") == client_id), None)
-        alternatives.append(
-            client_simple(raw_client["name"], raw_client)
-        )
-        not_yet_tried.remove(client_id)
+    schools_ordered_dist = sorted(ma["timeToSchool"].items(), key=lambda x: x[1])
+    for school_name, _ in schools_ordered_dist:
+        all_school_clients = [d for d in clients if d.get("school") == school_name]
+        for raw_client in all_school_clients:
+            if len(alternatives) >= 3:
+                return alternatives
+            if raw_client["id"] in not_yet_tried:
+                alternatives.append(
+                    client_simple(raw_client["name"], raw_client)
+                )
+                not_yet_tried.remove(raw_client["id"])
     
     return alternatives
 

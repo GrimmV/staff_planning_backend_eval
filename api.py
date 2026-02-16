@@ -30,25 +30,25 @@ def recommendations():
 def calculate_diff_endpoint():
     if request.method == 'OPTIONS':
         return _build_cors_preflight_response()
-    try:
-        data = request.get_json() or {}
-        
-        add_client = data.get('add_client', None)
-        add_ma = data.get('add_ma', None)
-        if add_client is None or add_ma is None:
-            return _corsify_actual_response(jsonify({"error": "add_client and add_ma are required"}))
-        unavailable_clients = data.get('unavailable_clients', None)
-        unavailable_mas = data.get('unavailable_mas', None)
-        
-        result, new_mas = calculate_diff(add_client=add_client, add_ma=add_ma, unavailable_clients=unavailable_clients, unavailable_mas=unavailable_mas)
-        assessment = evaluate_diff(result, new_mas)
-        
-        result["assessment"] = assessment
-        
-        return _corsify_actual_response(jsonify(result))
+    
+    data = request.get_json() or {}
+    
+    add_client = data.get('add_client', None)
+    add_ma = data.get('add_ma', None)
+    if add_client is None or add_ma is None:
+        return _corsify_actual_response(jsonify({"error": "add_client and add_ma are required"}))
+    unavailable_clients = data.get('unavailable_clients', None)
+    unavailable_mas = data.get('unavailable_mas', None)
+    
+    result, new_mas = calculate_diff(add_client=add_client, add_ma=add_ma, unavailable_clients=unavailable_clients, unavailable_mas=unavailable_mas)
+    assessment = evaluate_diff(result, new_mas)
+    
+    result["assessment"] = assessment
+    
+    return _corsify_actual_response(jsonify(result))
             
-    except Exception as e:
-        return _corsify_actual_response(jsonify({"error": str(e)}))
+    # except Exception as e:
+    #     return _corsify_actual_response(jsonify({"error": str(e)}))
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class Optimizer:
 
     def __init__(
-        self, employees: pd.DataFrame, clients: pd.DataFrame
+        self, employees: pd.DataFrame, clients: pd.DataFrame, forced_ma: str = None, forced_client: str = None
     ):
         # Define variables for employee self.assignments and client unassignment indicators
         self.assignments = {}
@@ -21,6 +21,8 @@ class Optimizer:
         self.model = cp.Model()
         self.employees = employees
         self.clients = clients
+        self.forced_ma = forced_ma
+        self.forced_client = forced_client
         
         self.ma_id_index_mapping = {}
         self.client_id_index_mapping = {}
@@ -34,7 +36,7 @@ class Optimizer:
             for j, client in self.clients.iterrows():
                 if client["school"] in emp["timeToSchool"] and has_required_qualifications(
                     emp["qualifications"], client["neededQualifications"]
-                ):
+                ) or (self.forced_ma and self.forced_client and emp["id"] == self.forced_ma and client["id"] == self.forced_client):
                     if not client["id"] in self.client_id_index_mapping:
                         self.client_id_index_mapping[client["id"]] = j
                     if not emp["id"] in self.ma_id_index_mapping:
@@ -95,6 +97,13 @@ class Optimizer:
                 )
                 <= 1
             ]
+            
+        if self.forced_ma and self.forced_client:
+            emp_index = self.ma_id_index_mapping.get(self.forced_ma, None)
+            client_index = self.client_id_index_mapping.get(self.forced_client, None)
+            if emp_index is None or client_index is None:
+                self.model += [False]
+            self.model += [self.assignments.get((emp_index, client_index), 0) == 1]
 
     def solve_model(self):
         if self.model.solve(solver="ortools"):
@@ -179,12 +188,14 @@ class Optimizer:
         else:
             availability_gap = None
 
+        print(f"timeToSchool: {emp['timeToSchool'].get(client['school'], None)}")
+
         pair_data = {
             "timeToSchool": emp["timeToSchool"].get(client["school"], None),
             "cl_experience": emp["cl_experience"].get(client["id"], 0),
             "school_experience": emp["school_experience"].get(client["school"], 0),
             "priority": int(client["priority"]),
-            "ma_availability": emp["availability"] == base_availability,
+            "ma_availability": (emp["availability"][1], client["timeWindow"][1]),
             "qualifications_met": all(
                 e in emp["qualifications"] for e in client["neededQualifications"]
             ),

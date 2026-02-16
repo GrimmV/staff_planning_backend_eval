@@ -7,6 +7,8 @@ from typing import List
 from opentelemetry.trace import StatusCode
 from llm.helper.cache import retrieve_cached_result, cache_result
 
+client, tracer = init_phoenix(project_name="staff-planning-v2")
+
 def evaluate_diff(diff: Dict, new_mas: List[str]) -> Dict:
     
     setting_str = f"diff: {diff}, new_mas: {new_mas}"
@@ -15,7 +17,6 @@ def evaluate_diff(diff: Dict, new_mas: List[str]) -> Dict:
         print(f"Cached result found")
         return cached_result
 
-    client, tracer = init_phoenix(project_name="staff-planning-v2")
 
     with tracer.start_as_current_span(
         "assessment", openinference_span_kind="agent"

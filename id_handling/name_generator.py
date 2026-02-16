@@ -78,42 +78,64 @@ def generate_random_school_name() -> str:
     return f"{last_name}-Schule"
 
 
+def _generate_unique_name(existing_names: set, generator) -> str:
+    """Generate a name that is not in existing_names. Uses generator() and retries until unique."""
+    used = set(existing_names)
+    max_attempts = 10_000  # avoid infinite loop if pool is exhausted
+    for _ in range(max_attempts):
+        name = generator()
+        if name not in used:
+            return name
+    # fallback: append a suffix to make unique
+    base = generator()
+    idx = 0
+    while f"{base} ({idx})" in used:
+        idx += 1
+    return f"{base} ({idx})"
+
+
 def ensure_names_for_ids(ids: list) -> Dict[str, str]:
     """
     Ensure that all provided IDs have names in the storage.
-    If a name doesn't exist for an ID, generate one and save it.
-    Returns a dictionary mapping ID to name.
+    If a name doesn't exist for an ID, generate a unique one and save it.
+    Returns a dictionary mapping ID to name. All names are unique.
     """
     name_mappings = load_name_mappings()
     updated = False
-    
+    used_names = set(name_mappings.values())
+
     for id_value in ids:
         if id_value not in name_mappings:
-            name_mappings[id_value] = generate_random_name()
+            name_mappings[id_value] = _generate_unique_name(used_names, generate_random_name)
+            used_names.add(name_mappings[id_value])
             updated = True
-    
+
     if updated:
         save_name_mappings(name_mappings)
-    
+
     return {id_value: name_mappings[id_value] for id_value in ids}
 
 
 def ensure_school_names_for_ids(ids: list) -> Dict[str, str]:
     """
     Ensure that all provided school IDs have school names in the storage.
-    If a name doesn't exist for an ID, generate one and save it.
-    Returns a dictionary mapping school ID to school name.
+    If a name doesn't exist for an ID, generate a unique one and save it.
+    Returns a dictionary mapping school ID to school name. All names are unique.
     """
     school_name_mappings = load_school_name_mappings()
     updated = False
-    
+    used_names = set(school_name_mappings.values())
+
     for id_value in ids:
         if id_value not in school_name_mappings:
-            school_name_mappings[id_value] = generate_random_school_name()
+            school_name_mappings[id_value] = _generate_unique_name(
+                used_names, generate_random_school_name
+            )
+            used_names.add(school_name_mappings[id_value])
             updated = True
-    
+
     if updated:
         save_school_name_mappings(school_name_mappings)
-    
+
     return {id_value: school_name_mappings[id_value] for id_value in ids}
 

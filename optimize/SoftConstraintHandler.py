@@ -52,12 +52,12 @@ class SoftConstrainedHandler:
 
         # Weights for each objective (default values if not provided)
         self.weights = weights or {
-            "unassigned": 10,
+            "unassigned": 1000,
             "travel_time": 30,
             "time_window": 10,
             "priority": 16,
-            "client_experience": 100,
-            "school_experience": 100,
+            "client_experience": 10,
+            "school_experience": 10,
             "availability_gap": 100,
         }
 
@@ -69,7 +69,7 @@ class SoftConstrainedHandler:
         normalized_experience = self._normalize(
             client_experience, self.client_experience_mean, self.client_experience_std
         )
-        scaled_experience = int(round(normalized_experience * scaling_factor))
+        scaled_experience = int(round(-normalized_experience * scaling_factor))
         return self.assignments[(i, j)] * scaled_experience
 
     def _compute_school_experience(self, i, j):
@@ -82,7 +82,7 @@ class SoftConstrainedHandler:
         normalized_experience = self._normalize(
             school_experience, self.school_experience_mean, self.school_experience_std
         )
-        scaled_experience = int(round(normalized_experience * scaling_factor))
+        scaled_experience = int(round(-normalized_experience * scaling_factor))
         return self.assignments[(i, j)] * scaled_experience
 
     def _normalize(self, value, mean, std):
@@ -142,7 +142,7 @@ class SoftConstrainedHandler:
         normalized_gap = self._normalize(
             availability_gap, self.availability_gap_mean, self.availability_gap_std
         )
-        scaled_gap = int(round(normalized_gap * scaling_factor))
+        scaled_gap = int(round(-normalized_gap * scaling_factor))
         return self.assignments[(i, j)] * scaled_gap
 
     def _compute_unassigned_objective(self):

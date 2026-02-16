@@ -15,7 +15,7 @@ feature_mapping_dr = {
     "school_experience": "Erfahrung mit der Schule",
     "priority": "Klienten-Priorität",
     "availability_gap": "Mitarbeiterverfügbarkeit in Tagen",
-    "ma_availability": "Zeitfenster des Mitarbeiters ist über vollen Zeitraum des Klienten",
+    "ma_availability": "Mitarbeiter muss früher gehen als der Klient",
 }
 
 name_mappings = load_name_mappings()
@@ -42,6 +42,9 @@ def gather_numeric_fields(items: List[Dict]) -> List[str]:
 def compute_basic_stats(values: List[float]) -> Dict[str, Any]:
     if not values:
         return {"durchschnitt": None, "max": None, "min": None}
+    
+    values = [v for v in values if v is not None]
+    print(f"values: {values}")
     count = len(values)
     mean = statistics.mean(values)
     max_value = max(values)
@@ -64,6 +67,7 @@ def compute_priority_stats(values: List[float]) -> Dict[str, Any]:
 def compute_verfügbarkeit_stats(values: List[float]) -> Dict[str, Any]:
     if not values:
         return {"voller_zeitraum": 0, "teilweiser_zeitraum": 0, "durchschnittlich_fehlend": 0}
+    print(f"values verfügbarkeit: {values}")
     voller_zeitraum = [value for value in values if value >= 0]
     teilweiser_zeitraum = [value for value in values if value < 0]
     durchschnittlich_fehlend = statistics.mean(teilweiser_zeitraum) if len(teilweiser_zeitraum) > 0 else 0
@@ -80,7 +84,13 @@ def compute_erfahrung_stats(values: List[float]) -> Dict[str, Any]:
 def compute_zeitfenster_stats(values: List[float]) -> Dict[str, Any]:
     if not values:
         return {"voller_zeitraum": 0, "teilweiser_zeitraum": 0}
-    return {"voller_zeitraum": values.count(True), "teilweiser_zeitraum": values.count(False)}
+    voller_zeitraum = [value for value in values if value[0] >= value[1]]
+    teilweiser_zeitraum = [value for value in values if value[0] < value[1]]
+    durchschnittlich_früher = statistics.mean([value[0] - value[1] for value in teilweiser_zeitraum]) if len(teilweiser_zeitraum) > 0 else 0
+    the_output = {"voller_zeitraum": len(voller_zeitraum), "teilweiser_zeitraum": len(teilweiser_zeitraum)}
+    if durchschnittlich_früher != 0:
+        the_output["durchschnittlich_früher"] = durchschnittlich_früher
+    return {"voller_zeitraum": len(voller_zeitraum), "teilweiser_zeitraum": len(teilweiser_zeitraum), "durchschnittlich_früher": durchschnittlich_früher}
 
 def field_values(items: List[Dict], field: str) -> List[float]:
     vals = []
@@ -105,6 +115,9 @@ def analyze_added_removed(
     for k in new_map.keys():
         if k not in old_map.keys():
             added.append(new_map[k])
+            
+    print(f"added: {added}")
+    print(f"removed: {removed}")
 
     stats = {
         "felder": {},
@@ -164,15 +177,8 @@ def calculate_diff(add_client: str, add_ma: str, unavailable_clients: List[str] 
         - abnormality_descriptions: List of abnormality descriptions for abnormal added items
     """
     
-    new_clients = unavailable_clients + [add_client] if unavailable_clients is not None else [add_client]
-    new_mas = unavailable_mas + [add_ma] if unavailable_mas is not None else [add_ma]
-    
     results_old = get_recommendations(unavailable_clients, unavailable_mas)
-    for d in results_old["assignment_info"]["assigned_pairs"]:
-        if d["ma"] == add_ma:
-            results_old["assignment_info"]["assigned_pairs"].remove(d)
-            break
-    results_new = get_recommendations(new_clients, new_mas)
+    results_new = get_recommendations(unavailable_clients, unavailable_mas, forced_ma=add_ma, forced_client=add_client)
     
     mas_old, clients_old = get_mas_and_clients(results_old)
     mas_new, clients_new = get_mas_and_clients(results_new)
