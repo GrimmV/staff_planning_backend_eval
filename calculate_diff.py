@@ -8,15 +8,8 @@ from get_recommendations import get_recommendations, get_mas_and_clients
 from llm_formatting.assignment_simple import assignment_simple
 from llm_formatting.assignment_simple import assignments_to_markdown
 
-
-feature_mapping_dr = {
-    "timeToSchool": "Fahrtzeit in Minuten",
-    "cl_experience": "Erfahrung mit dem Klienten",
-    "school_experience": "Erfahrung mit der Schule",
-    "priority": "Klienten-Priorität",
-    "availability_gap": "Mitarbeiterverfügbarkeit in Tagen",
-    "ma_availability": "Mitarbeiter muss früher gehen als der Klient",
-}
+from utils.float_to_time import float_to_time
+from utils.stats_feature_mapping import feature_mapping_dr
 
 name_mappings = load_name_mappings()
 
@@ -57,7 +50,7 @@ def compute_basic_stats(values: List[float]) -> Dict[str, Any]:
             )  # population stdev is fine here; use stdev() if you prefer sample
         except Exception:
             std = None
-    return {"durchschnitt": round(mean, 2), "max": round(max_value, 2), "min": round(min_value, 2)}
+    return {"durchschnitt": float_to_time(mean), "max": float_to_time(max_value), "min": float_to_time(min_value)}
 
 def compute_priority_stats(values: List[float]) -> Dict[str, Any]:
     if not values:
@@ -71,7 +64,7 @@ def compute_verfügbarkeit_stats(values: List[float]) -> Dict[str, Any]:
     voller_zeitraum = [value for value in values if value >= 0]
     teilweiser_zeitraum = [value for value in values if value < 0]
     durchschnittlich_fehlend = statistics.mean(teilweiser_zeitraum) if len(teilweiser_zeitraum) > 0 else 0
-    return {"voller_zeitraum": len(voller_zeitraum), "teilweiser_zeitraum": len(teilweiser_zeitraum), "durchschnittlich_fehlend": durchschnittlich_fehlend}
+    return {"voller_zeitraum": len(voller_zeitraum), "teilweiser_zeitraum": len(teilweiser_zeitraum), "durchschnittlich_fehlend": round(durchschnittlich_fehlend, 2)}
 
 def compute_erfahrung_stats(values: List[float]) -> Dict[str, Any]:
     if not values:
@@ -79,7 +72,7 @@ def compute_erfahrung_stats(values: List[float]) -> Dict[str, Any]:
     mit_erfahrung = [value for value in values if value > 0]
     ohne_erfahrung = [value for value in values if value == 0]
     durchschnittlich_erfahrung = statistics.mean(mit_erfahrung) if len(mit_erfahrung) > 0 else 0
-    return {"mit_erfahrung": len(mit_erfahrung), "ohne_erfahrung": len(ohne_erfahrung), "durchschnittlich_erfahrung": durchschnittlich_erfahrung}
+    return {"mit_erfahrung": len(mit_erfahrung), "ohne_erfahrung": len(ohne_erfahrung), "durchschnittlich_erfahrung": round(durchschnittlich_erfahrung, 2)}
 
 def compute_zeitfenster_stats(values: List[float]) -> Dict[str, Any]:
     if not values:
@@ -88,9 +81,9 @@ def compute_zeitfenster_stats(values: List[float]) -> Dict[str, Any]:
     teilweiser_zeitraum = [value for value in values if value[0] < value[1]]
     durchschnittlich_früher = statistics.mean([value[0] - value[1] for value in teilweiser_zeitraum]) if len(teilweiser_zeitraum) > 0 else 0
     the_output = {"voller_zeitraum": len(voller_zeitraum), "teilweiser_zeitraum": len(teilweiser_zeitraum)}
-    if durchschnittlich_früher != 0:
-        the_output["durchschnittlich_früher"] = durchschnittlich_früher
-    return {"voller_zeitraum": len(voller_zeitraum), "teilweiser_zeitraum": len(teilweiser_zeitraum), "durchschnittlich_früher": durchschnittlich_früher}
+    if durchschnittlich_früher == 0:
+        return the_output
+    return {"voller_zeitraum": len(voller_zeitraum), "teilweiser_zeitraum": len(teilweiser_zeitraum), "durchschnittlich_früher": float_to_time(durchschnittlich_früher)}
 
 def field_values(items: List[Dict], field: str) -> List[float]:
     vals = []
@@ -184,6 +177,8 @@ def calculate_diff(add_client: str, add_ma: str, unavailable_clients: List[str] 
     mas_new, clients_new = get_mas_and_clients(results_new)
 
     analysis_result, added, removed = analyze_added_removed(results_old["assignment_info"]["assigned_pairs"], results_new["assignment_info"]["assigned_pairs"])
+    
+    print(f"analysis_result: {analysis_result}")
     
     old_assignments = [assignment_simple(assignment["ma"], assignment["klient"], mas_old, clients_old) for assignment in removed]
     new_assignments = [assignment_simple(assignment["ma"], assignment["klient"], mas_new, clients_new) for assignment in added]
