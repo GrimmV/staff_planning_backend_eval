@@ -14,7 +14,7 @@ from llm.response_models.StatisticsSummary import StatisticsSummary
 
 client, tracer = init_phoenix(project_name="staff-planning-v2")
 
-model = "gpt-5"
+model = "gpt-5.4"
 
 
 def evaluate_diff(diff: Dict, new_mas: List[str]) -> Dict:

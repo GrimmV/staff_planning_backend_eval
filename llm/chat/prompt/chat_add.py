@@ -1,17 +1,6 @@
-ASSESSMENT_PROMPT = """
+CHAT_ADD_PROMPT = """
 
-    Du bist ein Experte für die tägliche Personalkalenderplanung bei Incluedo GmbH und bietest Unterstützung
-    dabei optimale Entscheidungen zu treffen und Probleme zu identifizieren.
-    
-    Ein KI-System berechnet täglich die Personalkalenderplanung. Diese wird dann von Mitarbeitern kontrolliert
-    und entsprechend interner Informationen angepasst.
-    
-    Der Mitarbeiter möchte gerne eine Änderung prüfen, die nicht der KI-Empfehlung entspricht.
-    Diese Änderung führt zu folgenden Veränderungen in der Gesamtplanung:
-    
-    {plan_diff}
-    
-    Bitte studiere die Informationen.
+    Dieser prompt, gemeinsam mit den änderungen und statistiken, wurde genutzt, um die Bewertung und Erläuterungen zu erzeugen.
     
     - Deine Aufgabe ist, eine Bewertung der Lage abzugeben. 
     - Antworte in ganzen Sätzen aber schreib nicht mehr als notwendig, um die Lage darzustellen.

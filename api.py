@@ -1,8 +1,9 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from get_recommendations import get_recommendations, prepare_output
 from calculate_diff import calculate_diff
 from cors_handling import _build_cors_preflight_response, _corsify_actual_response
 from evaluate_diff import evaluate_diff
+from llm.chat.chat import chat
 app = Flask(__name__)
 
 @app.route('/recommendations', methods=['POST', 'OPTIONS'])
@@ -46,9 +47,40 @@ def calculate_diff_endpoint():
     result["assessment"] = assessment
     
     return _corsify_actual_response(jsonify(result))
-            
-    # except Exception as e:
-    #     return _corsify_actual_response(jsonify({"error": str(e)}))
+
+@app.route("/api/v1/chat", methods=["POST", "OPTIONS"])
+def chat_completion():
+    if request.method == "OPTIONS":
+        return _build_cors_preflight_response()
+    elif request.method == "POST":
+        # try:
+        body = request.get_json() or {}
+        prompt = body.get("prompt")
+
+        if not prompt:
+            return _corsify_actual_response(
+                make_response(
+                    jsonify({"error": "Missing 'prompt' in request body"}), 400
+                )
+            )
+
+        response = chat(prompt)
+
+        response = make_response(
+            jsonify(
+                {
+                    "response": response,
+                }
+            )
+        )
+        return _corsify_actual_response(response)
+
+        # except Exception as e:
+        #     error_response = make_response(
+        #         jsonify({"error": f"Internal server error: {str(e)}"}), 500
+        #     )
+        #     return _corsify_actual_response(error_response)
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
