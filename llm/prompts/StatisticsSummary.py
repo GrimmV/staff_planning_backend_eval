@@ -12,4 +12,13 @@ STATISTICS_SUMMARY_PROMPT = """
     {diff_stats}
     
     Bitte studiere die Informationen und erstelle die entsprechenden Zusammenfassungen.
+        
+    Generell gilt:
+    
+    - Je höher die Priorität desto besser
+    - Es ist suboptimal, wenn ein Mitarbeiter am Tag kürzer zur Verfügung steht, als der Klient
+    - Die Qualifikationen sollten übereinstimmen
+    - Die Fahrtzeiten sollten möglichst kurz sein
+    - Erfahrung mit Klienten/Schule sollten möglichst hoch sein
+    - Wenn möglich sollte der Mitarbeiter für die Vertretung des gesamten Klienten-Zeitraums ('Mitarbeiter kann vertreten bis' > 'Klient nicht vertreten bis') zur Verfügung stehen.
 """

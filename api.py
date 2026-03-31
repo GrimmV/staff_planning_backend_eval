@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, url_for
 from get_recommendations import get_recommendations, prepare_output
 from calculate_diff import calculate_diff
 from cors_handling import _build_cors_preflight_response, _corsify_actual_response
@@ -81,6 +81,24 @@ def chat_completion():
         #     )
         #     return _corsify_actual_response(error_response)
 
+def has_no_empty_params(rule):
+    defaults = rule.defaults if rule.defaults is not None else ()
+    arguments = rule.arguments if rule.arguments is not None else ()
+    return len(defaults) >= len(arguments)
+
+
+@app.route("/site-map")
+def site_map():
+    links = []
+    for rule in app.url_map.iter_rules():
+        # Filter out rules we can't navigate to in a browser
+        # and rules that require parameters
+        links.append((rule.endpoint))
+    return links
+
+@app.route("/")
+def health():
+    return {"status": "ok"}
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='127.0.0.1', port=8080)

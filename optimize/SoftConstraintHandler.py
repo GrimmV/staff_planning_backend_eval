@@ -52,10 +52,10 @@ class SoftConstrainedHandler:
 
         # Weights for each objective (default values if not provided)
         self.weights = weights or {
-            "unassigned": 1000,
+            "unassigned": 10000,
             "travel_time": 30,
             "time_window": 10,
-            "priority": 16,
+            "priority": 300,
             "client_experience": 10,
             "school_experience": 10,
             "availability_gap": 100,

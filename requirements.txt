@@ -4,3 +4,5 @@ pandas
 cpmpy
 arize-phoenix==13.0.3
 opentelemetry-instrumentation-openai==0.52.3
+gunicorn==25.1.0
+flask==3.1.0
