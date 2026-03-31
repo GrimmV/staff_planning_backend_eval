@@ -15,11 +15,9 @@ SUMMARY_PROMPT = """
     
     Generell gilt:
     
-    - Je höher die Priorität desto besser
-    - Es ist suboptimal, wenn ein Mitarbeiter am Tag kürzer zur Verfügung steht, als der Klient
-    - Die Qualifikationen sollten übereinstimmen
-    - Die Fahrtzeiten sollten möglichst kurz sein
-    - Erfahrung mit Klienten/Schule sollten möglichst hoch sein
-    - Der Mitarbeiter sollte für alle Tage dem Klienten zur Verfügung stehen ('Mitarbeiter kann vertreten bis' > 'Klient nicht vertreten bis').
-    - Es ist KEIN Kriterium, ob Klienten besonders lange Tage haben oder für besonders viele Tage Vertretung benötigen. Beide Kriterien sind nur im Bezug auf die Mitarbeiter-Zuordnung relevant.
+    - Das allerwichtigste ist, dass Klienten mit hoher Priorität versorgt werden.
+    - Die Fahrtzeit ist nur relevant, wenn sie deutlich über 45 Minuten liegt.
+    - Erfahrung mit Klient und Schule ist eine sehr wichtige Eigenschaft
+    - Klient braucht Vertretung bis sollte im Vergleich zu Mitarbeiter verfügbar bis möglichst gleich oder kürzer sein.
+    - Speziell für Klienten mit hoher Priorität muss der Tagesplan kürzer sein, als die Tages-Verfügbarkeit des Mitarbeiters.
 """

@@ -16,15 +16,13 @@ ASSESSMENT_PROMPT = """
     - Deine Aufgabe ist, eine Bewertung der Lage abzugeben. 
     - Antworte in ganzen Sätzen aber schreib nicht mehr als notwendig, um die Lage darzustellen.
     
-    Priorisierung der Eigenschaften:
+    Folgendes ist zu beachten:
     
-    1. Anzahl der versorgten Klienten
-    2. Anzahl der hoch priorisierten Klienten
-    3. Durchschnittliche Fahrtzeit und Ausreißer mit hoher Fahrtzeit
-    4. Mitarbeiter kann Klienten den ganzen Tag betreuen
-    4. Erfahrung mit Klienten
-    4. Erfahrung mit Schule
-    4. Mitarbeiter kann Klienten für alle Vertretungstage betreuen
+    - Das allerwichtigste ist, dass Klienten mit hoher Priorität versorgt werden.
+    - Die Fahrtzeit ist nur relevant, wenn sie deutlich über 45 Minuten liegt.
+    - Erfahrung mit Klient und Schule ist eine sehr wichtige Eigenschaft
+    - Klient braucht Vertretung bis sollte im Vergleich zu Mitarbeiter verfügbar bis möglichst gleich oder kürzer sein.
+    - Speziell für Klienten mit hoher Priorität muss der Tagesplan kürzer sein, als die Tages-Verfügbarkeit des Mitarbeiters.
     
     Folgende Fragen sollst du beantworten (und nichts anderes):
     

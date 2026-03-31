@@ -16,7 +16,6 @@ client, tracer = init_phoenix(project_name="staff-planning-v2")
 
 model = "gpt-5.4"
 
-
 def evaluate_diff(diff: Dict, new_mas: List[str]) -> Dict:
 
     setting_str = f"diff: {diff}, new_mas: {new_mas}"
