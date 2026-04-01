@@ -13,6 +13,9 @@ from utils.stats_feature_mapping import feature_mapping_dr
 
 name_mappings = load_name_mappings()
 
+PRIORITY_KEYS = ("hoch", "mittel", "niedrig")
+PRIORITY_TO_KEY = {1: "hoch", 2: "mittel", 3: "niedrig"}
+
 
 def key_of(item: Dict) -> Tuple[str, str]:
     return item["ma"], item["klient"]
@@ -93,6 +96,30 @@ def field_values(items: List[Dict], field: str) -> List[float]:
     return vals
 
 
+def group_items_by_priority(items: List[Dict]) -> Dict[str, List[Dict]]:
+    buckets: Dict[str, List[Dict]] = {k: [] for k in PRIORITY_KEYS}
+    for item in items:
+        p = item.get("priority")
+        if p in PRIORITY_TO_KEY:
+            buckets[PRIORITY_TO_KEY[p]].append(item)
+    return buckets
+
+
+def stats_for_field(field: str, items: List[Dict]) -> Dict[str, Any]:
+    values = [item[field] for item in items]
+    if field == "ma_availability":
+        return compute_zeitfenster_stats(values)
+    if field == "priority":
+        return compute_priority_stats(values)
+    if field == "availability_gap":
+        return compute_verfügbarkeit_stats(values)
+    if field == "cl_experience":
+        return compute_erfahrung_stats(values)
+    if field == "school_experience":
+        return compute_erfahrung_stats(values)
+    return compute_basic_stats(values)
+
+
 def analyze_added_removed(
     old: List[Dict], new: List[Dict]
 ) -> Dict:
@@ -112,8 +139,10 @@ def analyze_added_removed(
     print(f"added: {added}")
     print(f"removed: {removed}")
 
-    stats = {
-        "felder": {},
+    added_by_priority = group_items_by_priority(added)
+    removed_by_priority = group_items_by_priority(removed)
+
+    stats: Dict[str, Any] = {
         "anzahl": {
             "gesamt_vorher": len(old),
             "gesamt_nachher": len(new),
@@ -121,34 +150,14 @@ def analyze_added_removed(
             "entfernt": len(removed),
         },
     }
-
-    for field, description in feature_mapping_dr.items():
-        values_added = [item[field] for item in added]
-        values_removed = [item[field] for item in removed]
-
-        if field == "ma_availability":
-            stats_added = compute_zeitfenster_stats(values_added)
-            stats_removed = compute_zeitfenster_stats(values_removed)
-        elif field == "priority":
-            stats_added = compute_priority_stats(values_added)
-            stats_removed = compute_priority_stats(values_removed)
-        elif field == "availability_gap":
-            stats_added = compute_verfügbarkeit_stats(values_added)
-            stats_removed = compute_verfügbarkeit_stats(values_removed)
-        elif field == "cl_experience":
-            stats_added = compute_erfahrung_stats(values_added)
-            stats_removed = compute_erfahrung_stats(values_removed)
-        elif field == "school_experience":
-            stats_added = compute_erfahrung_stats(values_added)
-            stats_removed = compute_erfahrung_stats(values_removed)
-        else:
-            stats_added = compute_basic_stats(values_added)
-            stats_removed = compute_basic_stats(values_removed)
-
-        stats["felder"][description] = {
-            "hinzugefügt": stats_added,
-            "entfernt": stats_removed
-        }
+    for prio_key in PRIORITY_KEYS:
+        felder: Dict[str, Dict[str, Any]] = {}
+        for field, description in feature_mapping_dr.items():
+            felder[description] = {
+                "hinzugefügt": stats_for_field(field, added_by_priority[prio_key]),
+                "entfernt": stats_for_field(field, removed_by_priority[prio_key]),
+            }
+        stats[prio_key] = {"felder": felder}
 
     return {
         "stats": stats,

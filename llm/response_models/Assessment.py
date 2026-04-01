@@ -3,15 +3,13 @@ from typing import Literal
 from id_handling.name_generator import load_name_mappings
 
 
+
 class Assessment(BaseModel):
-    score: Literal["akzeptieren", "eher akzeptieren", "eher ablehnen", "ablehnen"] = (
+    score: Literal["eher akzeptieren", "eher ablehnen", "ablehnen"] = (
         Field(
             ...,
             description="Bewertung der Konsequenzen durch die Änderung."
             + """
-                - 'akzeptieren':
-                Minimale negative Auswirkungen.
-
                 - 'eher akzeptieren':
                 Es gibt negative Auswirkungen, aber insgesamt ist die Änderung vertretbar.
 
@@ -22,5 +20,6 @@ class Assessment(BaseModel):
                 Die Änderung verschlechtert mehrere priorisierte Kriterien deutlich oder führt zu kritischen Problemen.""",
         )
     )
-    assessment: str = Field(..., description="Begründung für den Score.")
-    short_assessment: str = Field(..., description="Begründung in 1-2 Sätzen.")
+    general_assessment: str = Field(..., description="Generelle, Begründung für den Score in 1-2 Sätzen.")
+    detail_level_1_assessment: str = Field(..., description="Erläuterung der Effekte auf hohe Priorität Klienten in 1-2 Sätzen.")
+    detail_level_2_assessment: str = Field(..., description="Erläuterung der Effekte auf die einzelne Zuordnung mit den stärksten Auswirkungen.")

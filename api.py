@@ -3,7 +3,7 @@ from get_recommendations import get_recommendations, prepare_output
 from calculate_diff import calculate_diff
 from cors_handling import _build_cors_preflight_response, _corsify_actual_response
 from evaluate_diff import evaluate_diff
-from llm.chat.chat import chat
+from chat import chat
 app = Flask(__name__)
 
 @app.route('/recommendations', methods=['POST', 'OPTIONS'])

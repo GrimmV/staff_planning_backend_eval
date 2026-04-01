@@ -1,4 +1,6 @@
-ASSESSMENT_PROMPT = """
+from .general_guidance import GENERAL_GUIDANCE
+
+ASSESSMENT_PROMPT = f"""
 
     Du bist ein Experte für die tägliche Personalkalenderplanung bei Incluedo GmbH und bietest Unterstützung
     dabei optimale Entscheidungen zu treffen und Probleme zu identifizieren.
@@ -9,7 +11,7 @@ ASSESSMENT_PROMPT = """
     Der Mitarbeiter möchte gerne eine Änderung prüfen, die nicht der KI-Empfehlung entspricht.
     Diese Änderung führt zu folgenden Veränderungen in der Gesamtplanung:
     
-    {plan_diff}
+    {{plan_diff}}
     
     Bitte studiere die Informationen.
     
@@ -18,11 +20,7 @@ ASSESSMENT_PROMPT = """
     
     Folgendes ist zu beachten:
     
-    - Das allerwichtigste ist, dass Klienten mit hoher Priorität versorgt werden.
-    - Die Fahrtzeit ist nur relevant, wenn sie deutlich über 45 Minuten liegt.
-    - Erfahrung mit Klient und Schule ist eine sehr wichtige Eigenschaft
-    - Klient braucht Vertretung bis sollte im Vergleich zu Mitarbeiter verfügbar bis möglichst gleich oder kürzer sein.
-    - Speziell für Klienten mit hoher Priorität muss der Tagesplan kürzer sein, als die Tages-Verfügbarkeit des Mitarbeiters.
+{GENERAL_GUIDANCE}
     
     Folgende Fragen sollst du beantworten (und nichts anderes):
     
