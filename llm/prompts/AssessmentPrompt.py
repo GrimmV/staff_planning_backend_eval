@@ -26,6 +26,4 @@ ASSESSMENT_PROMPT = f"""
     
     - Welche Konsequenzen hat die Veränderung insgesamt? -> Gibt es Besondere Beobachtungen?
     - Welche Konsequenzen hat die Veränderung auf individueller Zuordnungsebene? -> Gibt es hinzugefügte Zuordnungen die signifikant schlechtere/bessere Werte aufweisen, als die entfernten?
-    
-    Bedenke, die Änderungen werden sogut wie immer etwas schlechter sein, als die ursprüngliche Planung. Daher solltest du nicht zu kritisch sein. Dennoch sollten (eher) Ablehnungen eine Option sein.
 """
