@@ -1,6 +1,4 @@
-from openai import OpenAI
 from dotenv import load_dotenv
-import instructor
 import os
 from llm.chat.response_model.chat_response import ChatResponseModel
 from llm.chat.prompt.chat_add import CHAT_ADD_PROMPT
