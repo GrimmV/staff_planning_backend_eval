@@ -215,6 +215,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-/data/
-/cache/
-/cache_llm/
+# /data/
+# /cache/
+# /cache_llm/

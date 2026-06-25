@@ -6,3 +6,6 @@ arize-phoenix==13.0.3
 opentelemetry-instrumentation-openai==0.52.3
 gunicorn==25.1.0
 flask==3.1.0
+arize-phoenix-client==1.29.0
+arize-phoenix-evals==2.10.0
+arize-phoenix-otel==0.14.0
