@@ -16,9 +16,23 @@ from optimize.utils.caching import cache_result, retrieve_cached_result
 from frontend_formatting.ma_simple import ma_simple
 from frontend_formatting.client_simple import client_simple
 
-def get_recommendations(unavailable_clients: List[str] = None, unavailable_mas: List[str] = None, forced_ma: str = None, forced_client: str = None):
-        
-    setting_str = f"unavailable_clients: {unavailable_clients}, unavailable_mas: {unavailable_mas}, forced_ma: {forced_ma}, forced_client: {forced_client}"
+def get_recommendations(
+    unavailable_clients: List[str] = None,
+    unavailable_mas: List[str] = None,
+    forced_ma: str = None,
+    forced_client: str = None,
+    date: datetime = None,
+):
+    if date is None:
+        date = datetime(2025, 3, 21)
+
+    setting_str = (
+        f"unavailable_clients: {unavailable_clients}, "
+        f"unavailable_mas: {unavailable_mas}, "
+        f"forced_ma: {forced_ma}, "
+        f"forced_client: {forced_client}, "
+        f"date: {date.isoformat()}"
+    )
     cached_result = retrieve_cached_result(setting_str)
     if cached_result is not None:
         clients = len(cached_result["clients"])
@@ -33,7 +47,6 @@ def get_recommendations(unavailable_clients: List[str] = None, unavailable_mas: 
     print(f"Using {len(clients)} clients and {len(mas)} MAS")
     experience_log = get_experience_log()
     
-    date = datetime(2025, 3, 21)
     vertretungen = get_vertretungen(date)
     
     data_processor = DataProcessor(mas, clients, distances, experience_log)
