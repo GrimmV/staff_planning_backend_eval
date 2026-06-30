@@ -31,8 +31,9 @@ cd staff-planning-backend-v2
 | 6 | `analyze_silver_label_deviation.py` | Balanced silver labels + evaluations | Alignment charts by setting |
 | 7 | `analyze_silver_label_deviation_by_complexity.py` | Balanced silver labels + evaluations + complexity | Alignment charts by complexity |
 | 8 | `analyze_divergence.py` | Balanced diffs + silver labels + full evaluations | LLM judge divergence analysis |
+| 9 | `validate_experiment_outputs.py` | Cached diffs + evaluations (all modes) | LLM judge clarity/coherence validation |
 
-Step 2 depends on step 1; step 3 depends on step 1 (`cache_diffs/` only). Step 4 depends on steps 2 and 3. Step 5 depends on steps 1 and 4 and requires API credentials. Steps 6 and 7 depend on steps 4 and 5; step 7 also depends on step 2. Step 8 depends on steps 1, 4, and 5 (`full` evaluations only) and requires API credentials. All scripts are idempotent: re-running overwrites or skips existing files in `cache_experiments/`.
+Step 2 depends on step 1; step 3 depends on step 1 (`cache_diffs/` only). Step 4 depends on steps 2 and 3. Step 5 depends on steps 1 and 4 and requires API credentials. Steps 6 and 7 depend on steps 4 and 5; step 7 also depends on step 2. Step 8 depends on steps 1, 4, and 5 (`full` evaluations only) and requires API credentials. Step 9 depends on steps 1, 4, and 5 (all evaluation modes) and requires API credentials. All scripts are idempotent: re-running overwrites or skips existing files in `cache_experiments/`.
 
 The optimizer also uses the shared runtime cache in `cache/` (SHA-256 keyed JSON files). Re-running experiments is faster when optimization results for the same settings already exist there.
 
@@ -507,6 +508,81 @@ Example entry:
 
 One LLM call per misaligned `full` evaluation (typically ~40 cases for 100 diffs). Expect API cost proportional to the number of misaligned cases.
 
+## Step 9: Output validation (LLM-as-a-judge)
+
+Run after steps 1, 4, and 5 have produced `cache_diffs/`, `cache_simple_diffs/`, `cache_balanced_sample.json`, and evaluations in `cache_evaluations/`. Requires OpenAI API credentials (or a compatible endpoint via `OPENAI_BASE_URL`).
+
+```powershell
+py -3.11 validate_experiment_outputs.py
+```
+
+Optional flags:
+
+```powershell
+py -3.11 validate_experiment_outputs.py --model Qwen3.6-27B
+py -3.11 validate_experiment_outputs.py --judge-model gpt-5.4 --base-url http://localhost:8000/v1
+py -3.11 validate_experiment_outputs.py --mode full --mode simple
+py -3.11 validate_experiment_outputs.py --output-dir cache_experiments/cache_validations
+```
+
+`--model` selects the evaluation cache folder (`{mode}__{model_slug}`). `--judge-model` overrides the judge LLM (default: `MODEL_NAME` env or `gpt-5.4`). `--mode` can be repeated to validate specific settings only.
+
+### What it does
+
+For each evaluation case in the balanced subset, an LLM judge scores every pipeline input/output pair on two dimensions (integer 0–10, each with a short explanation):
+
+| Dimension | Meaning |
+|-----------|---------|
+| **Clarity** | How clear and well-structured the generated output is for domain experts |
+| **Coherence** | How faithfully and logically the output follows from the input |
+
+Input/output pairs per evaluation mode:
+
+| Mode | Pairs | Input source |
+|------|-------|--------------|
+| `simple_direct` | 1 (`direct_assessment`) | `cache_simple_diffs/` assignment tables |
+| `simple` | 3 (`assignments_summary`, `statistics_summary`, `assessment`) | Simple diffs + `cache_diffs/` stats + combined intermediate outputs |
+| `full` | 3 (same steps) | `cache_diffs/` vorher/nachher + stats + combined intermediate outputs |
+
+Response models: `llm/response_models/OutputValidation.py` (`ClarityJudgment`, `CoherenceJudgment`). Prompts: `llm/prompts/OutputValidationPrompt.py`. Pair extraction: `experiment_validation_pairs.py`.
+
+### Output layout
+
+```
+cache_experiments/
+  cache_validations/
+    summary.json
+    full/
+      {YYYY-MM-DD}/
+        {parent}_to_{child}.json
+    simple/
+      ...
+    simple_direct/
+      ...
+```
+
+Example entry (per step):
+
+```json
+{
+  "diff_key": "2025-03-17/00_to_01.json",
+  "evaluation_mode": "full",
+  "judge_model": "gpt-5.4",
+  "steps": {
+    "assignments_summary": {
+      "clarity": { "score": 8, "explanation": "..." },
+      "coherence": { "score": 7, "explanation": "..." }
+    }
+  }
+}
+```
+
+`summary.json` reports mean clarity and coherence per mode and per pipeline step. Judge responses are deduplicated via `cache_llm/`. Re-running skips cases that already have an output file.
+
+### Runtime
+
+Two LLM calls per input/output pair (clarity + coherence, run in parallel). Expect ~800 judge calls for 100 balanced diffs across all three modes (100 × 1 + 100 × 3 + 100 × 3 pairs × 2 judgments).
+
 ## Quick start (full pipeline)
 
 ```powershell
@@ -519,6 +595,7 @@ py -3.11 evaluate_experiment_diffs.py
 py -3.11 analyze_silver_label_deviation.py
 py -3.11 analyze_silver_label_deviation_by_complexity.py
 py -3.11 analyze_divergence.py
+py -3.11 validate_experiment_outputs.py
 ```
 
 ## Notes
@@ -527,3 +604,4 @@ py -3.11 analyze_divergence.py
 - `cache_experiments/` is generated output; add it to `.gitignore` if you do not want to version large result files.
 - `cache_experiments/cache_balanced_sample.json` is the only balancing artifact; it stores selected IDs, not copied data.
 - Analysis charts and judge results (steps 6–8) are written under `cache_experiments/analysis/` and can be regenerated at any time from cached labels and evaluations.
+- Output validation results (step 9) are written under `cache_experiments/cache_validations/` and can be regenerated from cached diffs and evaluations.
