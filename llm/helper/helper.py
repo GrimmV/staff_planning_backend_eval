@@ -12,6 +12,16 @@ def get_openai_api_key():
     return openai_api_key
 
 
+def get_openai_base_url():
+    load_env()
+    return os.getenv("OPENAI_BASE_URL")
+
+
+def get_model_name():
+    load_env()
+    return os.getenv("MODEL_NAME")
+
+
 def get_phoenix_endpoint():
     load_env()
     phoenix_endpoint = os.getenv("PHOENIX_COLLECTOR_ENDPOINT")

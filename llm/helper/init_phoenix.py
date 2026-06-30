@@ -2,13 +2,20 @@ from openai import OpenAI
 import instructor
 from phoenix.otel import register
 from opentelemetry.instrumentation.openai import OpenAIInstrumentor
-from .helper import get_openai_api_key, get_phoenix_endpoint
+from .helper import get_openai_api_key, get_openai_base_url, get_phoenix_endpoint
 
 
-def init_phoenix(project_name: str = "staff-planning-v1"):
-    # initialize the OpenAI client
+def init_phoenix(project_name: str = "staff-planning-v1", base_url: str | None = None):
     openai_api_key = get_openai_api_key()
-    client = instructor.from_openai(OpenAI())
+    resolved_base_url = base_url or get_openai_base_url()
+
+    client_kwargs: dict = {}
+    if openai_api_key:
+        client_kwargs["api_key"] = openai_api_key
+    if resolved_base_url:
+        client_kwargs["base_url"] = resolved_base_url
+
+    client = instructor.from_openai(OpenAI(**client_kwargs))
 
     PROJECT_NAME = project_name
 

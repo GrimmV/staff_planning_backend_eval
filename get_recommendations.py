@@ -56,6 +56,8 @@ def get_recommendations(
     open_client_ids = [open_client["klientzubegleiten"]["id"] for open_client in open_clients_vertretung]
     open_clients = get_objects_by_id(clients, open_client_ids)
     open_ma_ids = [open_ma["mavertretend"]["id"] for open_ma in open_mas_vertretung]
+    # cut off open ma ids at 20
+    # open_ma_ids = open_ma_ids[:20]
     open_mas = get_objects_by_id(mas, open_ma_ids)
     
     clients_df, mas_df = data_processor.create_day_dataset(open_clients, open_mas, date)
@@ -110,7 +112,20 @@ def get_recommendations(
     return output
     
 def prepare_output(output: Dict) -> Dict:
-    
+    """Build the frontend-ready recommendation list from optimizer output.
+
+    This function iterates over the assigned MA/client pairs produced by the
+    optimizer, looks up the corresponding raw MA and client records, converts
+    them into the simplified frontend shapes, and enriches each recommendation
+    with up to three alternative clients for the same MA.
+
+    Args:
+        output: Full recommendation payload returned by `get_recommendations()`.
+
+    Returns:
+        A list of recommendation objects, each containing a simplified
+        `mitarbeiter`, the assigned `klient`, and `alternativeKlienten`.
+    """
     assignments = output["assignment_info"]["assigned_pairs"]
     
     recommendations = []
@@ -130,7 +145,20 @@ def prepare_output(output: Dict) -> Dict:
     
     return recommendations
 
-def get_mas_and_clients(output: Dict) -> Dict:
+def get_mas_and_clients(output: Dict) -> tuple[Dict, Dict]:
+    """Extract simplified assigned MAs and clients keyed by their IDs.
+
+    This function collects the MAs and clients that
+    appear in the assigned pairs and returns them as two dictionaries for quick
+    lookup by ID.
+
+    Args:
+        output: Full recommendation payload returned by `get_recommendations()`.
+
+    Returns:
+        A tuple `(mas, clients)` where each dictionary is keyed by object ID and
+        contains the simplified frontend representation.
+    """
     assignments = output["assignment_info"]["assigned_pairs"]
     
     mas = {}

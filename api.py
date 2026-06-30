@@ -21,6 +21,10 @@ def recommendations():
         
         result = get_recommendations(unavailable_clients, unavailable_mas)
         prepared_result = prepare_output(result)
+        print("result:")
+        print(result)
+        print("prepared_result:")
+        print(prepared_result)
         
         return _corsify_actual_response(jsonify(prepared_result))
             

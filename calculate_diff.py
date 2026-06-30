@@ -4,7 +4,7 @@ from id_handling.name_generator import load_name_mappings
 import statistics
 import json
 
-from get_recommendations import get_recommendations, get_mas_and_clients
+from get_recommendations import get_recommendations, get_mas_and_clients, prepare_output
 from llm_formatting.assignment_simple import assignment_simple
 from llm_formatting.assignment_simple import assignments_to_markdown
 
@@ -164,19 +164,70 @@ def analyze_added_removed(
     }, added, removed
 
 
+def recommendation_key(recommendation: Dict[str, Any]) -> Tuple[str, str]:
+    return recommendation["mitarbeiter"]["id"], recommendation["klient"]["id"]
+
+
+def get_changed_assignments(
+    add_client: str,
+    add_ma: str,
+    unavailable_clients: List[str] = None,
+    unavailable_mas: List[str] = None,
+    features: List[str] = None,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Return recommendation entries that were added or removed.
+
+    This is a lightweight alternative to `calculate_diff`. It computes the
+    baseline recommendations and the recommendations with a forced MA/client
+    assignment, converts both snapshots into the frontend recommendation format
+    via `prepare_output`, and returns only the recommendation entries that were
+    added or removed.
+
+    Args:
+        add_client: Client ID to force into the new recommendation snapshot.
+        add_ma: MA ID to force into the new recommendation snapshot.
+        unavailable_clients: Client IDs to exclude from both snapshots.
+        unavailable_mas: MA IDs to exclude from both snapshots.
+        features: Optional list of features to consider during analysis.
+
+    Returns:
+        A dictionary with keys `added` and `removed`, each containing a list of
+        recommendation objects in the same shape as `prepare_output`.
+    """
+    results_old = get_recommendations(unavailable_clients, unavailable_mas)
+    results_new = get_recommendations(
+        unavailable_clients,
+        unavailable_mas,
+        forced_ma=add_ma,
+        forced_client=add_client,
+    )
+
+    old_recommendations = prepare_output(results_old)
+    new_recommendations = prepare_output(results_new)
+
+    old_map = {recommendation_key(item): item for item in old_recommendations}
+    new_map = {recommendation_key(item): item for item in new_recommendations}
+
+    removed = [old_map[key] for key in old_map if key not in new_map]
+    added = [new_map[key] for key in new_map if key not in old_map]
+
+    return {"added": added, "removed": removed}
+
+
 def calculate_diff(add_client: str, add_ma: str, unavailable_clients: List[str] = None, unavailable_mas: List[str] = None, features: List[str] = None) -> Dict[str, Any]:
     """
-    Calculate the difference between two recommendation snapshots and generate abnormality descriptions.
-    
+    Compare baseline recommendations with a forced MA/client assignment.
+
     Args:
-        hard_constraints: Hard constraints for the recommendation (default: {})
-        client: OpenAI client instance (optional, for LLM calls)
-        tracer: Tracer instance (optional, for Phoenix tracing)
-    
+        add_client: Client ID to force into the new recommendation snapshot.
+        add_ma: MA ID to force into the new recommendation snapshot.
+        unavailable_clients: Client IDs to exclude from both snapshots.
+        unavailable_mas: MA IDs to exclude from both snapshots.
+        features: Optional list of features to consider during analysis.
+
     Returns:
-        Dictionary containing:
-        - result: The analysis result with added/removed items and stats
-        - abnormality_descriptions: List of abnormality descriptions for abnormal added items
+        A tuple containing the analysis result dictionary and the list of MA IDs
+        present in the new recommendation snapshot.
     """
     
     results_old = get_recommendations(unavailable_clients, unavailable_mas)
@@ -203,5 +254,8 @@ def calculate_diff(add_client: str, add_ma: str, unavailable_clients: List[str] 
 
 if __name__ == "__main__":
     
-    analysis_result, _ = calculate_diff("dc4f6682-5418-4e69-b08e-eded0d66b060", "f3bf2472-89c6-4bd0-bd31-b092a48a89c3")
-    print(json.dumps(analysis_result, indent=4))
+    # analysis_result, _ = calculate_diff(" dc4f6682-5418-4e69-b08e-eded0d66b060", "f3bf2472-89c6-4bd0-bd31-b092a48a89c3")
+    changed_assignments = get_changed_assignments("dc4f6682-5418-4e69-b08e-eded0d66b060", "f3bf2472-89c6-4bd0-bd31-b092a48a89c3")
+    # print(json.dumps(analysis_result, indent=4))
+    print(json.dumps(changed_assignments["added"], indent=4))
+    print(json.dumps(changed_assignments["removed"], indent=4))
