@@ -13,6 +13,7 @@ from alignment_analysis import (
     CACHE_COMPLEXITY,
     CACHE_SILVER_LABELS,
     EVALUATION_MODES,
+    alignment_rates,
     complexity_group,
     count_alignment_buckets,
     discover_model_slug,
@@ -23,6 +24,7 @@ from alignment_analysis import (
     load_mode_pairs,
     normalize_alignment_counts,
     plot_alignment_by_complexity_line,
+    plot_mode_metrics_dotplot,
     save_json,
 )
 from label_metrics import evaluate_pairs
@@ -98,6 +100,7 @@ def analyze_mode_by_complexity(
         group_stats[group] = {
             "n": len(group_pairs),
             "alignment_counts": alignment_counts,
+            "alignment_rates": alignment_rates(alignment_counts, len(group_pairs)),
             "alignment_percentages": {
                 category: round(alignment_percentages[category], 1)
                 for category in alignment_percentages
@@ -170,6 +173,22 @@ def run_analysis(model_slug: str, output_dir: str) -> Dict[str, Any]:
     )
     summary["charts"]["alignment_by_complexity"] = alignment_chart_path.replace("\\", "/")
 
+    for group in complexity_group_keys:
+        group_label = complexity_group_labels.get(group, group)
+        mode_stats = {
+            mode: summary["modes"][mode]["groups"][group] for mode in EVALUATION_MODES
+        }
+        metrics_chart_path = os.path.join(output_dir, f"metrics_by_mode_{group}.png")
+        plot_mode_metrics_dotplot(
+            mode_stats,
+            model_slug,
+            metrics_chart_path,
+            title_suffix=f" – {group_label}",
+        )
+        summary["charts"][f"metrics_by_mode_{group}"] = metrics_chart_path.replace(
+            "\\", "/"
+        )
+
     summary_path = os.path.join(output_dir, "summary.json")
     save_json(summary_path, summary)
     summary["summary_json"] = summary_path.replace("\\", "/")
@@ -186,23 +205,11 @@ def main() -> None:
     for mode in EVALUATION_MODES:
         print(f"  [{mode}]")
         mode_metrics = summary["modes"][mode]["label_metrics"]
-        overall_macro = (
-            f"{mode_metrics['macro_recall']:.1%}"
-            if mode_metrics["macro_recall"] is not None
-            else "n/a"
-        )
-        print(
-            f"    overall: n={mode_metrics['n_valid']}, macro_recall={overall_macro}"
-        )
+        print(f"    overall: n={mode_metrics['n_valid']}")
         for group in summary["complexity_groups"]:
             stats = summary["modes"][mode]["groups"][group]
             counts = stats["alignment_counts"]
             percentages = stats["alignment_percentages"]
-            macro_recall_str = (
-                f"{stats['macro_recall']:.1%}"
-                if stats["macro_recall"] is not None
-                else "n/a"
-            )
             optimism_str = (
                 f"{stats['harmful_optimism_at_risk']:.1%}"
                 if stats["harmful_optimism_at_risk"] is not None
@@ -210,7 +217,6 @@ def main() -> None:
             )
             print(
                 f"    [{group}] n={stats['n']}, "
-                f"macro_recall={macro_recall_str}, "
                 f"harmful_optimism_at_risk={optimism_str}, "
                 f"aligned={counts['aligned']} ({percentages['aligned']:.1f}%), "
                 f"unaligned={counts['unaligned']} ({percentages['unaligned']:.1f}%), "
@@ -218,6 +224,8 @@ def main() -> None:
                 f"({percentages['completely_unaligned']:.1f}%)"
             )
     print(f"  chart: {summary['charts']['alignment_by_complexity']}")
+    for group in summary["complexity_groups"]:
+        print(f"  chart: {summary['charts'][f'metrics_by_mode_{group}']}")
     print(f"  summary: {summary['summary_json']}")
 
 

@@ -62,6 +62,14 @@ def parse_args() -> argparse.Namespace:
         default=OUTPUT_DIR,
         help="Directory for per-case results and summary JSON.",
     )
+    parser.add_argument(
+        "--overwrite-cache",
+        action="store_true",
+        help=(
+            "Ignore cached divergence analyses and cached LLM judge results, "
+            "rerun all cases, and overwrite existing output files."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -105,8 +113,9 @@ def run_judge(
     judge_model: str,
     prompt: str,
     cache_key: str,
+    overwrite_cache: bool = False,
 ) -> Dict[str, Any]:
-    cached = retrieve_cached_result(cache_key)
+    cached = None if overwrite_cache else retrieve_cached_result(cache_key)
     if cached is not None:
         return cached
 
@@ -187,11 +196,14 @@ def analyze_case(
     tracer: Any,
     judge_model: str,
     output_dir: str,
+    overwrite_cache: bool = False,
 ) -> Dict[str, Any]:
     out_path = result_path(output_dir, case["diff_key"])
-    if os.path.exists(out_path):
+    if os.path.exists(out_path) and not overwrite_cache:
         print(f"  cached: {case['diff_key']}")
         return load_json(out_path)
+    if os.path.exists(out_path):
+        print(f"  overwriting cache: {case['diff_key']}")
 
     prompt = build_judge_prompt(
         case["silver_record"],
@@ -204,7 +216,14 @@ def analyze_case(
         case["silver_label"],
         case["assessment_score"],
     )
-    divergence = run_judge(client, tracer, judge_model, prompt, cache_key)
+    divergence = run_judge(
+        client,
+        tracer,
+        judge_model,
+        prompt,
+        cache_key,
+        overwrite_cache=overwrite_cache,
+    )
 
     result = {
         "diff_key": case["diff_key"],
@@ -251,6 +270,7 @@ def run_analysis(
     client: Any,
     tracer: Any,
     output_dir: str,
+    overwrite_cache: bool = False,
 ) -> Dict[str, Any]:
     allowed_diff_keys = load_balanced_diff_keys()
     silver_records = load_balanced_silver_label_records()
@@ -262,7 +282,16 @@ def run_analysis(
 
     results: List[Dict[str, Any]] = []
     for case in cases:
-        results.append(analyze_case(case, client, tracer, judge_model, output_dir))
+        results.append(
+            analyze_case(
+                case,
+                client,
+                tracer,
+                judge_model,
+                output_dir,
+                overwrite_cache=overwrite_cache,
+            )
+        )
 
     summary = {
         "evaluation_mode": EVALUATION_MODE,
@@ -289,10 +318,18 @@ def main() -> None:
     base_url_info = args.base_url or os.getenv("OPENAI_BASE_URL") or "default (OpenAI)"
     print(
         f"Running divergence analysis: evaluation={EVALUATION_MODE}__{model_slug}, "
-        f"judge_model={judge_model}, base_url={base_url_info}"
+        f"judge_model={judge_model}, base_url={base_url_info}, "
+        f"overwrite_cache={args.overwrite_cache}"
     )
 
-    summary = run_analysis(model_slug, judge_model, client, tracer, args.output_dir)
+    summary = run_analysis(
+        model_slug,
+        judge_model,
+        client,
+        tracer,
+        args.output_dir,
+        overwrite_cache=args.overwrite_cache,
+    )
     print(f"\nDone. {summary['n_cases']} misaligned cases analyzed.")
     print(f"  summary: {summary['summary_json']}")
     if summary["primary_divergence_type_counts"]:

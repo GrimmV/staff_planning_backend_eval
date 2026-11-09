@@ -74,6 +74,14 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Model name to use (overrides MODEL_NAME env var and evaluate_diff default).",
     )
+    parser.add_argument(
+        "--overwrite-cache",
+        action="store_true",
+        help=(
+            "Ignore cached experiment evaluations and cached LLM subresults, "
+            "rerun all requested evaluations, and overwrite existing output files."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -152,11 +160,11 @@ def recommendations_to_markdown(recommendations: List[Dict[str, Any]]) -> str:
     return assignments_to_markdown(assignments)
 
 
-def simple_diff_tables(simple_diff_payload: Dict[str, Any]) -> Tuple[str, str]:
+def simple_diff_tables(simple_diff_payload: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     changed = simple_diff_payload["changed_assignments"]
-    removed_md = recommendations_to_markdown(changed.get("removed", []))
-    added_md = recommendations_to_markdown(changed.get("added", []))
-    return removed_md, added_md
+    removed = changed.get("removed", [])
+    added = changed.get("added", [])
+    return removed, added
 
 
 def experiment_cache_key(mode: EvaluationMode, diff_path: str, extra: str = "") -> str:
@@ -194,11 +202,13 @@ def get_direct_assessment(plan_diff: str) -> Dict[str, Any]:
         return response_payload
 
 
-def evaluate_full_diff(diff_payload: Dict[str, Any], diff_path: str) -> Dict[str, Any]:
+def evaluate_full_diff(
+    diff_payload: Dict[str, Any], diff_path: str, overwrite_cache: bool = False
+) -> Dict[str, Any]:
     diff = diff_payload["diff"]
     new_mas = diff_payload.get("new_mas", [])
     cache_key = experiment_cache_key("full", diff_path)
-    cached = retrieve_cached_result(cache_key)
+    cached = None if overwrite_cache else retrieve_cached_result(cache_key)
     if cached is not None and evaluate_diff_module.has_llm_calls(cached):
         return cached
 
@@ -211,21 +221,22 @@ def evaluate_simple_diff(
     diff_payload: Dict[str, Any],
     simple_diff_payload: Dict[str, Any],
     diff_path: str,
+    overwrite_cache: bool = False,
 ) -> Dict[str, Any]:
     cache_key = experiment_cache_key("simple", diff_path)
-    cached = retrieve_cached_result(cache_key)
+    cached = None if overwrite_cache else retrieve_cached_result(cache_key)
     if cached is not None and evaluate_diff_module.has_llm_calls(cached):
         return cached
 
     diff = diff_payload["diff"]
-    removed_md, added_md = simple_diff_tables(simple_diff_payload)
+    removed, added = simple_diff_tables(simple_diff_payload)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         stats_future = executor.submit(
-            evaluate_diff_module.get_statistics_summary, diff["stats"]
+            evaluate_diff_module.get_statistics_summary, f"removed: {removed}, added: {added}"
         )
         summary_future = executor.submit(
-            evaluate_diff_module.get_assignments_summary, removed_md, added_md
+            evaluate_diff_module.get_assignments_summary, removed, added
         )
         statistics_summary = stats_future.result()
         summary = summary_future.result()
@@ -251,15 +262,17 @@ def evaluate_simple_diff(
 
 
 def evaluate_simple_diff_direct(
-    simple_diff_payload: Dict[str, Any], diff_path: str
+    simple_diff_payload: Dict[str, Any],
+    diff_path: str,
+    overwrite_cache: bool = False,
 ) -> Dict[str, Any]:
-    removed_md, added_md = simple_diff_tables(simple_diff_payload)
+    removed, added = simple_diff_tables(simple_diff_payload)
     plan_diff = (
-        f"entfernte Zuordnungen:\n{removed_md}\n\n"
-        f"hinzugefügte Zuordnungen:\n{added_md}"
+        f"entfernte Zuordnungen: {removed}\n\n"
+        f"hinzugefügte Zuordnungen: {added}"
     )
     cache_key = experiment_cache_key("simple_direct", diff_path)
-    cached = retrieve_cached_result(cache_key)
+    cached = None if overwrite_cache else retrieve_cached_result(cache_key)
     if cached is not None and evaluate_diff_module.has_llm_calls(cached):
         return cached
 
@@ -325,15 +338,22 @@ def iter_diff_files(allowed_diff_keys: set[str] | None = None) -> List[Tuple[str
     return entries
 
 
-def run_evaluation(mode: EvaluationMode, diff_path: str, date_folder: str) -> Dict[str, Any]:
+def run_evaluation(
+    mode: EvaluationMode,
+    diff_path: str,
+    date_folder: str,
+    overwrite_cache: bool = False,
+) -> Dict[str, Any]:
     filename = os.path.basename(diff_path)
     out_path = output_path(mode, date_folder, filename)
-    if os.path.exists(out_path):
+    if os.path.exists(out_path) and not overwrite_cache:
         cached_result = load_json(out_path)
         if evaluate_diff_module.has_llm_calls(cached_result.get("assessment", {})):
             print(f"  [{mode}] cached: {date_folder}/{filename}")
             return cached_result
         print(f"  [{mode}] refreshing tokens: {date_folder}/{filename}")
+    elif os.path.exists(out_path):
+        print(f"  [{mode}] overwriting cache: {date_folder}/{filename}")
 
     indices = parse_diff_filename(filename)
     if indices is None:
@@ -347,17 +367,26 @@ def run_evaluation(mode: EvaluationMode, diff_path: str, date_folder: str) -> Di
     )
 
     if mode == "full":
-        assessment = evaluate_full_diff(diff_payload, diff_path)
+        assessment = evaluate_full_diff(
+            diff_payload, diff_path, overwrite_cache=overwrite_cache
+        )
         simple_ref = simple_diff_path if os.path.exists(simple_diff_path) else None
     elif mode == "simple":
         if simple_diff_payload is None:
             raise FileNotFoundError(f"Missing simple diff for {diff_path}")
-        assessment = evaluate_simple_diff(diff_payload, simple_diff_payload, diff_path)
+        assessment = evaluate_simple_diff(
+            diff_payload,
+            simple_diff_payload,
+            diff_path,
+            overwrite_cache=overwrite_cache,
+        )
         simple_ref = simple_diff_path
     else:
         if simple_diff_payload is None:
             raise FileNotFoundError(f"Missing simple diff for {diff_path}")
-        assessment = evaluate_simple_diff_direct(simple_diff_payload, diff_path)
+        assessment = evaluate_simple_diff_direct(
+            simple_diff_payload, diff_path, overwrite_cache=overwrite_cache
+        )
         simple_ref = simple_diff_path
 
     result = build_result(
@@ -374,7 +403,7 @@ def run_evaluation(mode: EvaluationMode, diff_path: str, date_folder: str) -> Di
     return result
 
 
-def evaluate_all_experiment_diffs() -> Dict[str, Any]:
+def evaluate_all_experiment_diffs(overwrite_cache: bool = False) -> Dict[str, Any]:
     allowed_diff_keys = load_balanced_diff_keys()
     summary: Dict[str, Any] = {
         "model": model,
@@ -392,9 +421,20 @@ def evaluate_all_experiment_diffs() -> Dict[str, Any]:
             with tracer.start_as_current_span(
                 f"evaluate_experiment_{mode}", openinference_span_kind="agent"
             ) as span:
-                span.set_input({"diff_path": diff_path, "mode": mode})
+                span.set_input(
+                    {
+                        "diff_path": diff_path,
+                        "mode": mode,
+                        "overwrite_cache": overwrite_cache,
+                    }
+                )
                 try:
-                    result = run_evaluation(mode, diff_path, date_folder)
+                    result = run_evaluation(
+                        mode,
+                        diff_path,
+                        date_folder,
+                        overwrite_cache=overwrite_cache,
+                    )
                     span.set_output(result["assessment"])
                     span.set_status(StatusCode.OK)
                     summary["dates"][date_folder][mode] += 1
@@ -416,9 +456,10 @@ def main() -> None:
     allowed_diff_keys = load_balanced_diff_keys()
     print(
         f"Evaluating experiment diffs with model={model}, base_url={base_url_info}, "
-        f"balanced_sample_n={len(allowed_diff_keys)}"
+        f"balanced_sample_n={len(allowed_diff_keys)}, "
+        f"overwrite_cache={args.overwrite_cache}"
     )
-    summary = evaluate_all_experiment_diffs()
+    summary = evaluate_all_experiment_diffs(overwrite_cache=args.overwrite_cache)
     print(
         f"\nDone. {summary['total_evaluations']} evaluations written to "
         f"{CACHE_EVALUATIONS}/"

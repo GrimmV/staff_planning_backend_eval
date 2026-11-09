@@ -12,6 +12,7 @@ import numpy as np
 
 CACHE_ROOT = "cache_experiments"
 CACHE_DIFFS = os.path.join(CACHE_ROOT, "cache_diffs")
+CACHE_SIMPLE_DIFFS = os.path.join(CACHE_ROOT, "cache_simple_diffs")
 CACHE_SILVER_LABELS = os.path.join(CACHE_ROOT, "cache_silver_labels")
 CACHE_COMPLEXITY = os.path.join(CACHE_ROOT, "cache_complexity")
 CACHE_EVALUATIONS = os.path.join(CACHE_ROOT, "cache_evaluations")
@@ -64,7 +65,9 @@ MODE_DISPLAY_LABELS: Dict[str, str] = {
 
 METRIC_PLOT_SPECS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
     ("Exact match", ("exact_match_rate",)),
-    ("Macro recall", ("macro_recall",)),
+    ("Aligned", ("alignment_rates", "aligned")),
+    ("Unaligned", ("alignment_rates", "unaligned")),
+    ("Completely unaligned", ("alignment_rates", "completely_unaligned")),
     ("Recall ablehnen", ("class_recall", "ablehnen")),
     ("Harmful optimism (at-risk)", ("harmful_optimism_at_risk",)),
     ("Severe harmful optimism", ("severe_harmful_optimism",)),
@@ -110,6 +113,15 @@ def count_alignment_buckets(pairs: List[Dict[str, Any]]) -> Dict[AlignmentCatego
     for pair in pairs:
         counts[alignment_category(pair["ordinal_deviation"])] += 1
     return counts
+
+
+def alignment_rates(
+    counts: Dict[AlignmentCategory, int],
+    n: int,
+) -> Dict[AlignmentCategory, float]:
+    if n == 0:
+        return {category: 0.0 for category in ALIGNMENT_CATEGORIES}
+    return {category: counts[category] / n for category in ALIGNMENT_CATEGORIES}
 
 
 def triggered_rules_key(triggered_rules: List[str]) -> str:
@@ -430,6 +442,7 @@ def plot_mode_metrics_dotplot(
     model_slug: str,
     output_path: str,
     modes: Tuple[str, ...] = EVALUATION_MODES,
+    title_suffix: str = "",
 ) -> None:
     metric_labels = [label for label, _ in METRIC_PLOT_SPECS]
     y_positions = np.arange(len(metric_labels))
@@ -462,7 +475,8 @@ def plot_mode_metrics_dotplot(
     ax.set_xlim(0, 100)
     ax.set_xlabel("Rate (%)")
     ax.set_title(
-        f"Silver Label vs. Assessment – Metriken nach Setting\nModell: {model_slug}"
+        f"Silver Label vs. Assessment – Metriken nach Setting{title_suffix}\n"
+        f"Modell: {model_slug}"
     )
     ax.grid(axis="x", linestyle="--", alpha=0.35, zorder=0)
     ax.legend(loc="lower right", framealpha=0.9)

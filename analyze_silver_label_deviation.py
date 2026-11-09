@@ -18,6 +18,7 @@ from alignment_analysis import (
     CACHE_SILVER_LABELS,
     EVALUATION_MODES,
     SCORE_ORDINAL,
+    alignment_rates,
     count_alignment_buckets,
     discover_model_slug,
     load_balanced_diff_keys,
@@ -54,9 +55,11 @@ def parse_args() -> argparse.Namespace:
 def compute_mode_stats(pairs: list[Dict[str, Any]]) -> Dict[str, Any]:
     label_metrics = evaluate_pairs(pairs)
     alignment_counts = count_alignment_buckets(pairs)
+    n = label_metrics["n_valid"]
     return {
-        "n": label_metrics["n_valid"],
+        "n": n,
         "alignment_counts": alignment_counts,
+        "alignment_rates": alignment_rates(alignment_counts, n),
         **label_metrics,
     }
 
@@ -89,7 +92,9 @@ def plot_mode_heatmap(
         f"{mode} – Silver Label vs. Assessment\n"
         f"Modell: {model_slug} | n={stats['n']} | "
         f"Übereinstimmung={_format_rate(stats['exact_match_rate'])} | "
-        f"Macro-Recall={_format_rate(stats['macro_recall'])} | "
+        f"Übereinstimmend={_format_rate(stats['alignment_rates']['aligned'])} | "
+        f"Abweichend={_format_rate(stats['alignment_rates']['unaligned'])} | "
+        f"Völlig abweichend={_format_rate(stats['alignment_rates']['completely_unaligned'])} | "
         f"Ø Abweichung={stats['mean_ordinal_deviation']:.2f}"
         if stats["mean_ordinal_deviation"] is not None
         else (
@@ -167,7 +172,6 @@ def main() -> None:
         )
         print(
             f"  [{mode}] n={stats['n']}, "
-            f"macro_recall={_format_rate(stats['macro_recall'])}, "
             f"harmful_optimism_at_risk={_format_rate(stats['harmful_optimism_at_risk'])}, "
             f"severe_harmful_optimism={_format_rate(stats['severe_harmful_optimism'])}, "
             f"signed_deviation={signed_deviation}, "

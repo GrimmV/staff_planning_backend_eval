@@ -29,11 +29,15 @@ cd staff-planning-backend-v2
 | 4 | `balance_dataset.py` | Silver labels + complexity | Balanced diff-key manifest |
 | 5 | `evaluate_experiment_diffs.py` | Cached diffs + simple diffs + balanced manifest | LLM assessments (3 modes) |
 | 6 | `analyze_silver_label_deviation.py` | Balanced silver labels + evaluations | Alignment charts by setting |
+| 6a | `analyze_warning_preservation.py` | Balanced silver labels + evaluations | Grouped warning-preservation table by setting |
+| 6b | `analyze_label_metric_uncertainty.py` | Balanced silver labels + evaluations | Paired stratified bootstrap CIs for label metrics |
 | 7 | `analyze_silver_label_deviation_by_complexity.py` | Balanced silver labels + evaluations + complexity | Alignment charts by complexity |
 | 8 | `analyze_divergence.py` | Balanced diffs + silver labels + full evaluations | LLM judge divergence analysis |
+| 8a | `analyze_trigger_fact_preservation.py` | Balanced silver labels + evaluations | LLM judge trigger-fact preservation in planner-facing explanations |
 | 9 | `validate_experiment_outputs.py` | Cached diffs + evaluations (all modes) | LLM judge clarity/coherence validation |
+| 9a | `analyze_experiment_validations.py` | Validation results + evaluations + complexity | Validation-score and token-usage analysis by setting and complexity |
 
-Step 2 depends on step 1; step 3 depends on step 1 (`cache_diffs/` only). Step 4 depends on steps 2 and 3. Step 5 depends on steps 1 and 4 and requires API credentials. Steps 6 and 7 depend on steps 4 and 5; step 7 also depends on step 2. Step 8 depends on steps 1, 4, and 5 (`full` evaluations only) and requires API credentials. Step 9 depends on steps 1, 4, and 5 (all evaluation modes) and requires API credentials. All scripts are idempotent: re-running overwrites or skips existing files in `cache_experiments/`.
+Step 2 depends on step 1; step 3 depends on step 1 (`cache_diffs/` only). Step 4 depends on steps 2 and 3. Step 5 depends on steps 1 and 4 and requires API credentials. Steps 6, 6a, 6b, and 7 depend on steps 4 and 5; step 7 also depends on step 2. Step 8 depends on steps 1, 4, and 5 (`full` evaluations only) and requires API credentials. Step 8a depends on steps 4 and 5 and requires API credentials. Step 9 depends on steps 1, 4, and 5 (all evaluation modes) and requires API credentials. Step 9a depends on steps 2, 4, 5, and 9. All scripts are idempotent: re-running overwrites or skips existing files in `cache_experiments/`.
 
 The optimizer also uses the shared runtime cache in `cache/` (SHA-256 keyed JSON files). Re-running experiments is faster when optimization results for the same settings already exist there.
 
@@ -387,6 +391,135 @@ cache_experiments/
 
 Shared alignment logic lives in `alignment_analysis.py`.
 
+### Additional view: grouped warning preservation
+
+If you want to collapse the two warning-like classes into
+`W = {eher ablehnen, ablehnen}`, you can run:
+
+```powershell
+py -3.11 analyze_warning_preservation.py
+```
+
+Optional flags:
+
+```powershell
+py -3.11 analyze_warning_preservation.py --model Qwen3.6-27B
+py -3.11 analyze_warning_preservation.py --output-dir cache_experiments/analysis/warning_preservation
+```
+
+This script uses the balanced subset from step 4 and the cached assessment scores from step 5, then reports one table row per evaluation setting with the following metrics:
+
+- **Warning preservation**: share of cases with `y_i in W` for which the prediction also remains in `W`
+- **False reassurance**: share of cases with `y_i in W` that are predicted as `eher akzeptieren`
+- **Hard-case warning preservation**: share of cases with `y_i = ablehnen` for which the prediction remains in `W`
+- **Hard false reassurance**: share of cases with `y_i = ablehnen` that are predicted as `eher akzeptieren`
+
+With the current cache, the generated table is:
+
+| Mode | Warning preservation | False reassurance | Hard-case warning preservation | Hard false reassurance |
+|------|----------------------|-------------------|-------------------------------|------------------------|
+| `full` | `84.0%` | `16.0%` | `100.0%` | `0.0%` |
+| `simple` | `74.0%` | `26.0%` | `82.0%` | `18.0%` |
+| `simple_direct` | `16.0%` | `84.0%` | `0.0%` | `100.0%` |
+
+### Output layout
+
+```
+cache_experiments/
+  analysis/
+    warning_preservation/
+      warning_preservation_table.csv
+      summary.json
+```
+
+`warning_preservation_table.csv` contains the dissertation-ready summary table. `summary.json` additionally stores the raw per-mode denominators, numerators, and rates.
+
+### Additional view: bootstrap uncertainty for label metrics
+
+If you want uncertainty intervals for the main label-based metrics, you can run:
+
+```powershell
+py -3.11 analyze_label_metric_uncertainty.py
+```
+
+Optional flags:
+
+```powershell
+py -3.11 analyze_label_metric_uncertainty.py --model Qwen3.6-27B
+py -3.11 analyze_label_metric_uncertainty.py --bootstrap-samples 10000
+py -3.11 analyze_label_metric_uncertainty.py --output-dir cache_experiments/analysis/label_metric_uncertainty
+```
+
+This script uses the balanced subset from step 4 and the cached assessment scores from step 5 to estimate non-parametric 95% bootstrap confidence intervals for:
+
+- **Exact match**
+- **Harmful optimism (at-risk)**
+- **Warning preservation**
+
+The bootstrap is designed to match the evaluation setup:
+
+- resampling is performed at the **case level**, not separately for each setting
+- the resampled cases are kept **paired across all three prompting configurations**
+- resampling is **stratified by silver label** so that the balanced 50/50/50 class design is preserved in every bootstrap sample
+
+By default, the script uses **10,000 bootstrap samples** and reports percentile intervals based on the 2.5th and 97.5th percentiles of the bootstrap distribution.
+
+### Output layout
+
+```
+cache_experiments/
+  analysis/
+    label_metric_uncertainty/
+      label_metric_uncertainty.png
+      label_metric_uncertainty.csv
+      summary.json
+```
+
+- `label_metric_uncertainty.png` shows point estimates with 95% bootstrap confidence intervals for all three settings.
+- `label_metric_uncertainty.csv` contains one row per metric and setting with point estimates, interval bounds, and bootstrap summary statistics.
+- `summary.json` stores the bootstrap design, per-mode results, and a ready-to-cite methods paragraph.
+
+### Additional view: trigger-fact preservation figure
+
+If you want a dissertation-ready grouped bar chart for the trigger-fact
+preservation analysis, you can run:
+
+```powershell
+py -3.11 plot_trigger_fact_preservation.py
+```
+
+Optional flags:
+
+```powershell
+py -3.11 plot_trigger_fact_preservation.py --input cache_experiments/analysis/trigger_fact_preservation/summary.json
+py -3.11 plot_trigger_fact_preservation.py --output-dir cache_experiments/analysis/trigger_fact_preservation
+```
+
+This script reads the cached trigger-fact preservation summary and plots four
+rates for all three prompting configurations:
+
+- **Trigger-fact recall**
+- **Hard-trigger recall**
+- **Caution-trigger recall**
+- **Critical omission rate**
+
+The figure is tuned to make the main comparison easy to see: direct summary
+nearly loses hard triggers entirely, while full evidence and condensed evidence
+preserve most trigger facts.
+
+### Output layout
+
+```
+cache_experiments/
+  analysis/
+    trigger_fact_preservation/
+      trigger_fact_preservation_metrics.png
+      trigger_fact_preservation_plot.json
+```
+
+`trigger_fact_preservation_plot.json` stores the source summary path and the
+generated figure path.
+
 ## Step 7: Silver-label alignment by complexity
 
 Run after steps 2, 4, and 5 have produced `cache_complexity/`, `cache_balanced_sample.json`, and `cache_evaluations/`.
@@ -508,6 +641,78 @@ Example entry:
 
 One LLM call per misaligned `full` evaluation (typically ~40 cases for 100 diffs). Expect API cost proportional to the number of misaligned cases.
 
+## Step 8a: Trigger-fact preservation (LLM-as-a-judge)
+
+Run after steps 4 and 5 have produced `cache_balanced_sample.json`, `cache_silver_labels/`, and evaluations in `cache_evaluations/`. Requires OpenAI API credentials (or a compatible endpoint via `OPENAI_BASE_URL`).
+
+```powershell
+py -3.11 analyze_trigger_fact_preservation.py
+```
+
+Optional flags:
+
+```powershell
+py -3.11 analyze_trigger_fact_preservation.py --model Qwen3.6-27B
+py -3.11 analyze_trigger_fact_preservation.py --judge-model gpt-5.4 --base-url http://localhost:8000/v1
+py -3.11 analyze_trigger_fact_preservation.py --mode full --mode simple
+py -3.11 analyze_trigger_fact_preservation.py --output-dir cache_experiments/analysis/trigger_fact_preservation
+```
+
+### What it does
+
+For each balanced evaluation case whose silver-label record contains one or more
+`triggered_rules`, the script maps those rules to **must-mention trigger facts**
+and asks a judge LLM whether each fact is still explicitly communicated in the
+planner-facing explanation layer:
+
+- `general_assessment`
+- `detail_level_1_assessment`
+- `detail_level_2_assessment`
+
+The current rule-to-fact mapping distinguishes two severity classes:
+
+- **Hard triggers**: high-priority client becomes unassigned / loses coverage; severe coverage loss
+- **Caution triggers**: substantial familiarity drop; commute above threshold; worsened high-priority timing/availability
+
+For each fact, the judge checks both whether it is **mentioned** and whether the
+**polarity is correct**. A fact counts as preserved only if both are true.
+
+### Output layout
+
+```
+cache_experiments/
+  analysis/
+    trigger_fact_preservation/
+      summary.json
+      full/
+        {YYYY-MM-DD}/
+          {parent}_to_{child}.json
+      simple/
+        ...
+      simple_direct/
+        ...
+```
+
+Each per-case result stores the evaluated explanation fields, the fact-level
+judge outputs, and whether all / none of the trigger facts were preserved.
+`summary.json` aggregates, per evaluation mode:
+
+- overall **trigger-fact recall**
+- **complete trigger preservation** rate
+- **critical omission rate**
+- **hard-trigger recall**
+- **caution-trigger recall**
+- fact-level counts and recall by trigger type
+
+Judge responses are cached via `cache_llm/`. Re-running skips case files that
+already exist in the target output directory.
+
+### Runtime
+
+One judge call per trigger fact per case. Runtime and API cost depend on how
+many balanced-sample cases contain triggered silver-label rules and how many
+facts each case maps to.
+
 ## Step 9: Output validation (LLM-as-a-judge)
 
 Run after steps 1, 4, and 5 have produced `cache_diffs/`, `cache_simple_diffs/`, `cache_balanced_sample.json`, and evaluations in `cache_evaluations/`. Requires OpenAI API credentials (or a compatible endpoint via `OPENAI_BASE_URL`).
@@ -579,9 +784,99 @@ Example entry (per step):
 
 `summary.json` reports mean clarity and coherence per mode and per pipeline step. Judge responses are deduplicated via `cache_llm/`. Re-running skips cases that already have an output file.
 
+### Post-processing and dissertation figures
+
+After `validate_experiment_outputs.py` has produced `cache_validations/`, you can generate dissertation-ready figures and statistical summaries with:
+
+```powershell
+py -3.11 plot_output_validation_by_complexity.py
+```
+
+This script rebuilds case-level validation records from the cached validation outputs and writes:
+
+```text
+cache_experiments/
+  analysis/
+    output_validation/
+      validation_scores_by_setting.png
+      validation_scores_by_complexity_heatmap.png
+      validation_statistics_table.csv
+      validation_statistics_table_posthoc.csv
+      validation_statistics.json
+```
+
+What it produces:
+
+- `validation_scores_by_setting.png`: main figure comparing prompting settings overall
+- `validation_scores_by_complexity_heatmap.png`: exploratory heatmaps by merged complexity group
+- `validation_statistics_table.csv`: compact Friedman-test summary table
+- `validation_statistics_table_posthoc.csv`: pairwise Wilcoxon signed-rank post-hoc results
+- `validation_statistics.json`: detailed statistics including mixed-effects robustness checks
+
+The script aggregates at the planning-case level to avoid pseudo-replication, runs Friedman tests separately for clarity and coherence, applies Holm-corrected Wilcoxon post-hoc tests when appropriate, and adds an exploratory mixed-effects model using the numeric pipeline complexity score.
+
 ### Runtime
 
 Two LLM calls per input/output pair (clarity + coherence, run in parallel). Expect ~800 judge calls for 100 balanced diffs across all three modes (100 × 1 + 100 × 3 + 100 × 3 pairs × 2 judgments).
+
+## Step 9a: Validation analysis and token usage
+
+Run after steps 2, 4, 5, and 9 have produced `cache_complexity/`,
+`cache_balanced_sample.json`, `cache_evaluations/`, and `cache_validations/`.
+No additional LLM calls.
+
+```powershell
+py -3.11 analyze_experiment_validations.py
+```
+
+Optional flags:
+
+```powershell
+py -3.11 analyze_experiment_validations.py --model Qwen3.6-27B
+py -3.11 analyze_experiment_validations.py --validation-dir cache_experiments/cache_validations
+py -3.11 analyze_experiment_validations.py --output-dir cache_experiments/analysis/output_validation
+```
+
+### What it does
+
+This script joins the balanced validation results from step 9 with:
+
+- the corresponding cached evaluations from step 5
+- the per-case complexity scores from step 2
+
+It then computes case-level mean **clarity** and **coherence** scores across all
+judged pipeline steps in each evaluation record and extracts summed
+assessment-generation **input/output token usage** from the cached `llm_calls`
+metadata.
+
+The analysis produces three views:
+
+- boxplots of **clarity** and **coherence** by evaluation setting
+- boxplots of the same metrics **by complexity quartile and setting**
+- boxplots of **assessment token usage** (input and output tokens) by setting
+
+### Output layout
+
+```
+cache_experiments/
+  analysis/
+    output_validation/
+      clarity_coherence_by_mode.png
+      clarity_coherence_by_complexity.png
+      assessment_tokens_by_mode.png
+      summary.json
+```
+
+`summary.json` stores the detected model slug, the balanced-sample size, the
+complexity-group labels, and aggregated means per evaluation setting for:
+
+- clarity
+- coherence
+- input tokens
+- output tokens
+
+It also includes aggregate clarity/coherence means by complexity group and the
+paths of the generated charts.
 
 ## Quick start (full pipeline)
 
@@ -593,9 +888,13 @@ py -3.11 calculate_silver_labels.py
 py -3.11 balance_dataset.py
 py -3.11 evaluate_experiment_diffs.py
 py -3.11 analyze_silver_label_deviation.py
+py -3.11 analyze_warning_preservation.py
+py -3.11 analyze_label_metric_uncertainty.py
 py -3.11 analyze_silver_label_deviation_by_complexity.py
 py -3.11 analyze_divergence.py
+py -3.11 analyze_trigger_fact_preservation.py
 py -3.11 validate_experiment_outputs.py
+py -3.11 analyze_experiment_validations.py
 ```
 
 ## Notes
@@ -605,3 +904,4 @@ py -3.11 validate_experiment_outputs.py
 - `cache_experiments/cache_balanced_sample.json` is the only balancing artifact; it stores selected IDs, not copied data.
 - Analysis charts and judge results (steps 6–8) are written under `cache_experiments/analysis/` and can be regenerated at any time from cached labels and evaluations.
 - Output validation results (step 9) are written under `cache_experiments/cache_validations/` and can be regenerated from cached diffs and evaluations.
+- The output-validation post-processing script writes dissertation figures and statistical summaries under `cache_experiments/analysis/output_validation/`.

@@ -3,6 +3,8 @@ python-dotenv==1.2.1
 pandas
 matplotlib
 seaborn
+scipy
+statsmodels
 cpmpy
 arize-phoenix==13.0.3
 opentelemetry-instrumentation-openai==0.52.3

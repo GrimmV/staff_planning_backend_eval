@@ -73,6 +73,14 @@ def parse_args() -> argparse.Namespace:
         dest="modes",
         help="Evaluation mode(s) to validate (default: all three).",
     )
+    parser.add_argument(
+        "--overwrite-cache",
+        action="store_true",
+        help=(
+            "Ignore cached validation results and cached LLM judge results, "
+            "rerun all requested validations, and overwrite existing output files."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -116,8 +124,9 @@ def run_judge(
     input_text: str,
     output_text: str,
     cache_key: str,
+    overwrite_cache: bool = False,
 ) -> Dict[str, Any]:
-    cached = retrieve_cached_result(cache_key)
+    cached = None if overwrite_cache else retrieve_cached_result(cache_key)
     if cached is not None:
         return cached
 
@@ -156,6 +165,7 @@ def validate_pair(
     mode: str,
     diff_key: str,
     pair: Dict[str, str],
+    overwrite_cache: bool = False,
 ) -> Dict[str, Any]:
     step = pair["step"]
     input_text = pair["input"]
@@ -174,6 +184,7 @@ def validate_pair(
             input_text,
             output_text,
             cache_key,
+            overwrite_cache=overwrite_cache,
         )
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -202,17 +213,34 @@ def validate_case(
     tracer: Any,
     judge_model: str,
     output_dir: str,
+    overwrite_cache: bool = False,
 ) -> Dict[str, Any]:
     out_path = result_path(output_dir, mode, diff_key)
-    if os.path.exists(out_path):
+    if os.path.exists(out_path) and not overwrite_cache:
         print(f"  [{mode}] cached: {diff_key}")
         return load_json(out_path)
+    if os.path.exists(out_path):
+        print(f"  [{mode}] overwriting cache: {diff_key}")
+    else:
+        print(f"  [{mode}] rebuilding without llm cache: {diff_key}")
+
+    # If the per-case validation output is missing, force fresh sub-judgments
+    # instead of reconstructing the case from shared cache_llm entries.
+    bypass_llm_cache = overwrite_cache or not os.path.exists(out_path)
 
     pairs = build_validation_pairs(
         mode, evaluation["assessment"], diff_payload, simple_diff_payload
     )
     step_results = [
-        validate_pair(client, tracer, judge_model, mode, diff_key, pair)
+        validate_pair(
+            client,
+            tracer,
+            judge_model,
+            mode,
+            diff_key,
+            pair,
+            overwrite_cache=bypass_llm_cache,
+        )
         for pair in pairs
     ]
 
@@ -317,6 +345,7 @@ def run_validation(
     client: Any,
     tracer: Any,
     output_dir: str,
+    overwrite_cache: bool = False,
 ) -> Dict[str, Any]:
     allowed_diff_keys = load_balanced_diff_keys()
     cases = iter_evaluation_cases(model_slug, modes, allowed_diff_keys)
@@ -334,6 +363,7 @@ def run_validation(
             tracer,
             judge_model,
             output_dir,
+            overwrite_cache=overwrite_cache,
         )
         results_by_mode[case["mode"]].append(result)
 
@@ -369,11 +399,18 @@ def main() -> None:
     base_url_info = args.base_url or os.getenv("OPENAI_BASE_URL") or "default (OpenAI)"
     print(
         f"Running output validation: evaluation={model_slug}, "
-        f"judge_model={judge_model}, modes={modes}, base_url={base_url_info}"
+        f"judge_model={judge_model}, modes={modes}, base_url={base_url_info}, "
+        f"overwrite_cache={args.overwrite_cache}"
     )
 
     summary = run_validation(
-        model_slug, judge_model, modes, client, tracer, args.output_dir
+        model_slug,
+        judge_model,
+        modes,
+        client,
+        tracer,
+        args.output_dir,
+        overwrite_cache=args.overwrite_cache,
     )
     print(f"\nDone. {summary['total_validations']} case validations written.")
     print(f"  summary: {summary['summary_json']}")
