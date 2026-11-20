@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>XAI Seeking · Evidence to guidance</title>
+  <meta name="description" content="An offline comparison of deterministic and cached generative mediation of planning evidence.">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="examples.js"></script>
+  <script defer src="engine.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="#"><span class="brand-icon">≋</span> XAI <span>SEEKING LAB</span></a><div class="top-actions"><span class="offline"><i></i> Offline · cached evidence</span><button id="focus" aria-pressed="false">Presentation view</button><button id="print">Print / PDF</button></div></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">PLANNING EVIDENCE → HUMAN GUIDANCE</p><h1>Same evidence.<br><span>Two ways to explain it.</span></h1></div><p class="intro-copy">Keep the constraint-programming results.<br>Change how they become a summary and a recommendation.<br><strong>Explore the XAI seeking principle through three cached planning changes.</strong></p></section>
+    <section class="cases" aria-label="Choose a cached example" id="cases"></section>
+    <div class="workspace">
+      <div class="main-column">
+        <nav class="pipeline" aria-label="Explanation layer">
+          <button data-stage="evidence"><span>01</span> Evidence</button><b>→</b><button data-stage="summaries"><span>02</span> Summaries</button><b>→</b><button data-stage="recommendation" class="active"><span>03</span> Recommendation</button><button data-stage="discussion" class="discuss-tab">Discuss the approach ↗</button>
+        </nav>
+        <div class="context"><div><p class="eyebrow" id="case-meta"></p><h2 id="case-title"></h2><p id="case-subtitle"></p></div><span id="agreement" class="badge"></span></div>
+        <section id="stage" aria-label="Selected explanation layer"></section>
+        <aside class="takeaway"><span class="eyebrow">DISCUSSION CUE</span><p id="case-note"></p></aside>
+      </div>
+      <aside class="policy-panel">
+        <p class="eyebrow">THE DETERMINISTIC ALTERNATIVE</p><h2>A policy you can inspect.</h2><p>Compute facts → apply ordered rules → fill fixed sentences.</p>
+        <div class="policy-control"><label for="threshold">Commute warning threshold <output id="threshold-value" for="threshold">50 min</output></label><input id="threshold" type="range" min="20" max="70" value="50" step="1"><div class="range-labels"><span>20 min</span><span>70 min</span></div><p>Flag only when travel is <strong>strictly greater</strong> than the threshold. The cached LLM output stays fixed.</p><button id="reset">Reset policy to 50 min</button><p id="policy-state" role="status"></p></div>
+        <div id="trace"></div>
+        <p class="policy-foot">First matching rule decides. Lower rules remain visible for inspection. Familiarity means at least one recorded day, regardless of frequency.</p>
+        <button class="text-button" id="method-button" aria-expanded="false" aria-controls="method">Read method & limitations ↗</button>
+      </aside>
+    </div>
+    <section id="method" class="method" hidden>
+      <p class="eyebrow">FOR YOUR PRESENTATION</p><h2>The principle stays. The mediation changes.</h2>
+      <p>Both paths lift the same cached planning evidence into selected facts and textual guidance. The deterministic path makes the selection criteria, value judgments and wording explicit. The generative path interprets the evidence through prompts and a language model.</p>
+      <div class="table-scroll"><table><thead><tr><th>Dimension</th><th>Deterministic demonstration</th><th>Recorded generative approach</th></tr></thead><tbody>
+        <tr><th>Fact selection</th><td>Fixed metrics and all changed employees</td><td>Model selects relevant statistics and up to three changes per employee</td></tr>
+        <tr><th>Recommendation</th><td>Ordered rules; explicit cutoffs and precedence</td><td>Prompt-guided interpretation of intermediate summaries</td></tr>
+        <tr><th>Language</th><td>Fixed English templates</td><td>Original German text from the cache</td></tr>
+        <tr><th>Reproducibility</th><td>Same evidence + policy → same output</td><td>Recorded sample is fixed here; no repeated-generation claim is tested</td></tr>
+        <tr><th>Tradeoff</th><td>Easy to trace; brittle outside encoded cases</td><td>Flexible expression; selected facts and judgments need verification</td></tr>
+      </tbody></table></div>
+      <div class="method-notes"><div><h3>What the rules mean</h3><p>Policy v1 is a proposed contrast, not a validated ground truth. The 50-minute threshold and coverage-loss cutoff borrow from <code>calculate_silver_labels.py</code>. Binary familiarity, end-time and date checks follow the priorities in <code>llm/prompts/general_guidance.py</code>. It is deliberately not an exact reproduction of the silver-label policy.</p><p>R1 checks individual lost high-priority clients, not just a net count. R2 checks added qualification mismatches and high-priority end-time shortfalls. R3 flags familiarity loss, long commutes and added time/date shortfalls. R4 accepts the remaining cases provisionally. Other tradeoffs, including a single medium/low-priority coverage loss, do not independently trigger rejection.</p></div><div><h3>What this demo can establish</h3><p>These three examples were deliberately selected to illustrate different mechanisms, including disagreement and agreement. They do not measure accuracy or establish which approach is better. Rule changes are sensitivity experiments; they do not change the cached LLM prompt or evidence.</p><p>Only total assignment counts describe the whole plan. Other metrics describe removed/added assignments. End-time coverage is not full-day feasibility: start times and other solver constraints are outside this view. Names are used as keys because the LLM tables contain names; a production adapter should use stable IDs.</p></div></div>
+      <h3>Implementation boundary</h3><p><code>evaluate_diff.py</code> currently calls statistics summary, assignment summary and assessment models. This standalone prototype replaces all three with <code>engine.js → evaluateDiff(diff, policy)</code>. The optimizer and production API are unchanged. The engine reads only the diff, never the cached assessment. Unsupported or inconsistent input returns “manual review”.</p>
+    </section>
+    <footer><span>XAI seeking · a comparison of evidence mediation</span><div><button id="export">Export this comparison (JSON)</button><span>3 recorded cases · no live model · no external assets</span></div></footer>
+  </main>
+  <noscript>This demonstration requires JavaScript enabled. It makes no network requests.</noscript>
+</body>
+</html>

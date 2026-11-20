@@ -5,6 +5,7 @@ Metrics:
     - Exact match
     - Harmful optimism (at-risk)
     - Warning preservation
+    - Hard-case warning preservation (JSON and CSV; the figure retains three metrics)
 
 Bootstrap design:
     - resample at the case level, not per setting
@@ -36,6 +37,7 @@ from dissertation_figure_style import (
     percentage_axis, export_figure,
 )
 from label_metrics import evaluate_pairs
+from analyze_warning_preservation import compute_mode_stats
 
 OUTPUT_DIR = "cache_experiments/analysis/label_metric_uncertainty"
 WARNING_LABELS = {"eher ablehnen", "ablehnen"}
@@ -99,6 +101,7 @@ def build_metric_arrays(
         dtype=np.int8,
     )
     at_risk_mask = silver_ord > 0
+    hard_case_mask = silver_ord == 2
 
     arrays: Dict[str, Dict[str, np.ndarray]] = {}
     for mode in EVALUATION_MODES:
@@ -118,6 +121,8 @@ def build_metric_arrays(
             "harmful_optimism_at_risk": (pred_ord < silver_ord) & at_risk_mask,
             "warning_preservation": (pred_ord > 0) & at_risk_mask,
             "at_risk_mask": at_risk_mask,
+            "hard_case_warning_preservation": (pred_ord > 0) & hard_case_mask,
+            "hard_case_mask": hard_case_mask,
         }
 
     return arrays
@@ -212,6 +217,8 @@ def run_paired_stratified_bootstrap(
     strata = stratify_case_indices(case_records)
     if not strata:
         raise ValueError("No case records available for bootstrap.")
+    if "ablehnen" not in strata:
+        raise ValueError("Hard-case warning preservation requires silver 'ablehnen' cases.")
 
     point_estimates: Dict[str, Dict[str, float | None]] = {}
     bootstrap_values: Dict[str, Dict[str, np.ndarray]] = {
@@ -219,6 +226,7 @@ def run_paired_stratified_bootstrap(
             "exact_match": np.empty(n_bootstrap, dtype=float),
             "harmful_optimism_at_risk": np.empty(n_bootstrap, dtype=float),
             "warning_preservation": np.empty(n_bootstrap, dtype=float),
+            "hard_case_warning_preservation": np.empty(n_bootstrap, dtype=float),
         }
         for mode in EVALUATION_MODES
     }
@@ -231,6 +239,9 @@ def run_paired_stratified_bootstrap(
             "exact_match": label_metrics["exact_match_rate"],
             "harmful_optimism_at_risk": label_metrics["harmful_optimism_at_risk"],
             "warning_preservation": compute_warning_preservation(mode_pairs),
+            "hard_case_warning_preservation": compute_mode_stats(mode_pairs)[
+                "hard_case_warning_preservation"
+            ],
         }
 
     rng = np.random.default_rng(seed)
@@ -254,6 +265,11 @@ def run_paired_stratified_bootstrap(
             bootstrap_values[mode]["warning_preservation"][sample_idx] = float(
                 metric_arrays[mode]["warning_preservation"][sampled_indices].sum()
                 / at_risk_n
+            )
+            hard_case_n = int(metric_arrays[mode]["hard_case_mask"][sampled_indices].sum())
+            bootstrap_values[mode]["hard_case_warning_preservation"][sample_idx] = float(
+                metric_arrays[mode]["hard_case_warning_preservation"][sampled_indices].sum()
+                / hard_case_n
             )
 
     summary_modes: Dict[str, Any] = {}
@@ -297,6 +313,7 @@ def build_table_rows(summary_modes: Dict[str, Any]) -> List[Dict[str, Any]]:
         "exact_match": "Exact match",
         "harmful_optimism_at_risk": "Harmful optimism (at-risk)",
         "warning_preservation": "Warning preservation",
+        "hard_case_warning_preservation": "Hard-case warning preservation",
     }
     rows: List[Dict[str, Any]] = []
     for metric_key, metric_label in metric_labels.items():
@@ -407,7 +424,18 @@ def run_analysis(
             "exact_match",
             "harmful_optimism_at_risk",
             "warning_preservation",
+            "hard_case_warning_preservation",
         ],
+        "hard_case_warning_preservation_definition": {
+            "silver_label": "ablehnen",
+            "preserved_predictions": sorted(WARNING_LABELS),
+            "denominator": stratum_sizes["ablehnen"],
+        },
+        "bootstrap_boundary_note": (
+            "If all observed eligible cases have the same outcome, every bootstrap "
+            "resample has that outcome and the percentile interval has zero width. "
+            "This does not establish a population rate of exactly 0% or 100%."
+        ),
         "modes": bootstrap_result["modes"],
         "artifacts": {
             "table_csv": csv_path.replace("\\", "/"),
@@ -463,7 +491,8 @@ def main() -> None:
             f"  [{mode}] "
             f"exact_match={_format_ci(metrics['exact_match'])}, "
             f"harmful_optimism_at_risk={_format_ci(metrics['harmful_optimism_at_risk'])}, "
-            f"warning_preservation={_format_ci(metrics['warning_preservation'])}"
+            f"warning_preservation={_format_ci(metrics['warning_preservation'])}, "
+            f"hard_case_warning_preservation={_format_ci(metrics['hard_case_warning_preservation'])}"
         )
     print(f"  plot: {summary['artifacts']['plot_png']}")
     print(f"  table: {summary['artifacts']['table_csv']}")

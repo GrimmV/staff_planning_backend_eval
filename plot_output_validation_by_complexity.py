@@ -26,6 +26,7 @@ from alignment_analysis import (
     EVALUATION_MODES,
     load_balanced_diff_keys,
     load_complexity_by_diff,
+    load_complexity_quartile_config,
     load_json,
     save_json,
 )
@@ -67,11 +68,6 @@ SETTING_TABLE_LABELS: Dict[str, str] = {
 CLARITY_QUALITY_THRESHOLD = 8.0
 
 MERGED_COMPLEXITY_ORDER: Tuple[str, ...] = ("low", "medium", "high")
-MERGED_COMPLEXITY_LABELS: Dict[str, str] = {
-    "low": "Low complexity",
-    "medium": "Medium complexity",
-    "high": "High complexity",
-}
 MERGED_COMPLEXITY_SOURCES: Dict[str, Tuple[str, ...]] = {
     "low": ("Q1",),
     "medium": ("Q2", "Q3"),
@@ -137,7 +133,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--heatmap-output",
         default=DEFAULT_HEATMAP_OUTPUT,
-        help="Output path for the exploratory complexity heatmap figure (PNG).",
+        help="Output path for the complexity heatmaps (also writes PDF, SVG, and caption).",
     )
     parser.add_argument(
         "--stats-table",
@@ -152,7 +148,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dpi",
         type=int,
-        default=200,
+        default=300,
         help="Figure resolution in dots per inch.",
     )
     parser.add_argument(
@@ -160,10 +156,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip the exploratory mixed-effects robustness check.",
     )
-    parser.add_argument(
+    plot_options = parser.add_mutually_exclusive_group()
+    plot_options.add_argument(
         "--no-plot",
         action="store_true",
         help="Run statistics only without generating the figure.",
+    )
+    plot_options.add_argument(
+        "--heatmap-only",
+        action="store_true",
+        help="Regenerate only the complexity heatmaps from cached validation scores.",
     )
     return parser.parse_args()
 
@@ -182,8 +184,6 @@ def load_plot_data(summary_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     }
     if not complexities:
         raise FileNotFoundError(f"No complexity scores found in {CACHE_COMPLEXITY}")
-
-    from alignment_analysis import load_complexity_quartile_config
 
     complexity_group_keys, _, quartile_breakpoints = load_complexity_quartile_config()
     records = build_records(
@@ -230,6 +230,16 @@ def add_merged_complexity_group(case_df: pd.DataFrame) -> pd.DataFrame:
     enriched = case_df.copy()
     enriched["complexity_group_merged"] = enriched["complexity_group"].map(source_to_merged)
     return enriched.dropna(subset=["complexity_group_merged"])
+
+
+def merged_complexity_labels(breakpoints: Tuple[float, float, float]) -> Dict[str, str]:
+    """Merge Q2 and Q3 while retaining the assignment's exclusive lower bound."""
+    q1, _, q3 = breakpoints
+    return {
+        "low": f"Low\nc ≤ {q1:g}",
+        "medium": f"Medium\n{q1:g} < c ≤ {q3:g}",
+        "high": f"High\nc > {q3:g}",
+    }
 
 
 def median_iqr(values: pd.Series) -> Tuple[float, float, float]:
@@ -592,13 +602,17 @@ def ordered_modes(df: pd.DataFrame) -> List[str]:
 
 
 def apply_plot_style() -> None:
+    apply_style()
     plt.rcParams.update(
         {
-            "font.size": 10,
-            "axes.titlesize": 11,
-            "axes.labelsize": 10,
-            "xtick.labelsize": 9,
-            "ytick.labelsize": 9,
+            # The bundled Noto Sans subset lacks mathematical inequality glyphs.
+            "font.family": ["Noto Sans", "DejaVu Sans"],
+            "font.size": 12,
+            "axes.titlesize": 14,
+            "axes.labelsize": 12,
+            "xtick.labelsize": 12,
+            "ytick.labelsize": 12,
+            "legend.fontsize": 12,
         }
     )
 
@@ -787,6 +801,7 @@ def draw_heatmap_panel(
     annotations: List[List[str]],
     modes: Sequence[str],
     complexity_groups: Sequence[str],
+    complexity_group_labels: Dict[str, str],
     title: str,
     cmap: str,
     vmin: float,
@@ -798,14 +813,13 @@ def draw_heatmap_panel(
     ax.set_xticks(np.arange(len(complexity_groups)))
     ax.set_yticks(np.arange(len(modes)))
     ax.set_xticklabels(
-        [MERGED_COMPLEXITY_LABELS[group] for group in complexity_groups],
-        rotation=15,
-        ha="right",
-        rotation_mode="anchor",
+        [complexity_group_labels[group] for group in complexity_groups],
+        ha="center",
     )
-    ax.set_yticklabels([PROMPTING_LABELS[mode] for mode in modes])
-    ax.set_xlabel("Planning complexity score group")
-    ax.set_title(title)
+    ax.set_yticklabels(setting_tick_labels(modes))
+    ax.set_xlabel("Case complexity score, c", labelpad=8)
+    ax.set_title(title, loc="left", pad=12)
+    ax.grid(False)
 
     for row_index in range(len(modes)):
         for col_index in range(len(complexity_groups)):
@@ -820,11 +834,12 @@ def draw_heatmap_panel(
                 ha="center",
                 va="center",
                 color=text_color,
-                fontsize=8.5,
+                fontsize=13,
             )
 
-    cbar = plt.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+    cbar = plt.colorbar(image, ax=ax, fraction=0.046, pad=0.04, aspect=25)
     cbar.set_label(cbar_label)
+    cbar.ax.tick_params(labelsize=12)
 
 
 def plot_complexity_heatmap_figure(
@@ -837,6 +852,13 @@ def plot_complexity_heatmap_figure(
     complexity_groups = [
         group for group in MERGED_COMPLEXITY_ORDER if group in enriched["complexity_group_merged"].unique()
     ]
+    _, _, breakpoints = load_complexity_quartile_config()
+    group_labels = merged_complexity_labels(breakpoints)
+    for group in complexity_groups:
+        n_cases = enriched.loc[
+            enriched["complexity_group_merged"] == group, "diff_key"
+        ].nunique()
+        group_labels[group] += f"\n(N={n_cases})"
     apply_plot_style()
 
     clarity_matrix, clarity_annotations = heatmap_matrix(
@@ -856,18 +878,21 @@ def plot_complexity_heatmap_figure(
         annotation="median",
     )
 
-    fig, axes = plt.subplots(1, 2, figsize=(10.8, 4.4), constrained_layout=True)
+    # Stack panels at the dissertation's final width so embedding the figure
+    # does not shrink the larger type. Keep this exact canvas on export.
+    fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 8.0), constrained_layout=True)
     draw_heatmap_panel(
         axes[0],
         clarity_matrix,
         clarity_annotations,
         modes,
         complexity_groups,
-        title=f"Clarity: share below {CLARITY_QUALITY_THRESHOLD:.0f}",
+        group_labels,
+        title=f"(a) Clarity: cases below {CLARITY_QUALITY_THRESHOLD:.0f}",
         cmap="YlOrRd",
         vmin=0.0,
         vmax=max(15.0, np.nanmax(clarity_matrix) * 1.15),
-        cbar_label="Share below threshold (%)",
+        cbar_label="Cases below threshold (%)",
     )
     draw_heatmap_panel(
         axes[1],
@@ -875,24 +900,44 @@ def plot_complexity_heatmap_figure(
         coherence_annotations,
         modes,
         complexity_groups,
-        title="Coherence: median score",
+        group_labels,
+        title="(b) Coherence: median score",
         cmap="YlGnBu",
         vmin=0.0,
         vmax=10.0,
-        cbar_label="Median validation score",
+        cbar_label="Median score (0–10)",
     )
 
     for axis in axes:
         axis.tick_params(top=False, bottom=True, left=True, right=False)
 
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    fig.savefig(output_path, dpi=dpi, bbox_inches="tight", facecolor="white")
+    q1, _, q3 = breakpoints
+    export_figure(
+        fig, output_path, "Output validation by case complexity.",
+        "Exploratory output validation by case complexity and prompting setting. "
+        "Validation scores are averaged across steps within each record, then "
+        "aggregated by the median of records per case and setting. "
+        f"Low (Q1): c ≤ {q1:g}; medium (Q2+Q3): {q1:g} < c ≤ {q3:g}; "
+        f"high (Q4): c > {q3:g}. Cutoffs come from the balanced-sample manifest; "
+        "the groups do not overlap. N denotes the number of cases in each group. "
+        f"(a) Percentage of cases with clarity strictly below {CLARITY_QUALITY_THRESHOLD:g} "
+        "(lower is better); n in each cell is the count below that threshold. "
+        "(b) Median coherence on the 0–10 scale (higher is better). "
+        "These validation scores are not direct measures of planner performance.",
+        dpi=dpi,
+    )
     plt.close(fig)
 
 
 def main() -> None:
     args = parse_args()
     df, summary = load_plot_data(args.summary)
+
+    if args.heatmap_only:
+        case_df = aggregate_case_level(df, ordered_modes(df))
+        plot_complexity_heatmap_figure(case_df, args.heatmap_output, args.dpi)
+        print(f"Wrote heatmaps (PNG/PDF/SVG) and caption to {args.heatmap_output}")
+        return
 
     results_table, post_hoc_table, analyses, mixed_model_results = run_statistical_analysis(
         df,

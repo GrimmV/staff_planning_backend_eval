@@ -154,6 +154,19 @@ def complexity_quartile_group(
     return "Q4"
 
 
+def complexity_quartile_labels(
+    breakpoints: Tuple[float, float, float],
+) -> Dict[str, str]:
+    """Describe the same disjoint, right-closed intervals used for assignment."""
+    q1, q2, q3 = breakpoints
+    return {
+        "Q1": f"c ≤ {q1:g}",
+        "Q2": f"{q1:g} < c ≤ {q2:g}",
+        "Q3": f"{q2:g} < c ≤ {q3:g}",
+        "Q4": f"c > {q3:g}",
+    }
+
+
 def load_balanced_sample(path: str = BALANCED_SAMPLE_PATH) -> Dict[str, Any]:
     if not os.path.exists(path):
         raise FileNotFoundError(
@@ -174,12 +187,14 @@ def load_complexity_quartile_config(
     manifest = load_balanced_sample(path)
     quartiles = manifest["complexity_quartiles"]
     keys = tuple(quartiles["bin_keys"])
-    labels = quartiles["bin_labels"]
     breakpoints = (
         float(quartiles["q1"]),
         float(quartiles["q2"]),
         float(quartiles["q3"]),
     )
+    # Older manifests use ambiguous labels such as "5–6"; derive labels from
+    # the stored cutoffs without changing the sample or its group assignments.
+    labels = complexity_quartile_labels(breakpoints)
     return keys, labels, breakpoints
 
 

@@ -419,8 +419,8 @@ With the current cache, the generated table is:
 | Mode | Warning preservation | False reassurance | Hard-case warning preservation | Hard false reassurance |
 |------|----------------------|-------------------|-------------------------------|------------------------|
 | `full` | `84.0%` | `16.0%` | `100.0%` | `0.0%` |
-| `simple` | `74.0%` | `26.0%` | `82.0%` | `18.0%` |
-| `simple_direct` | `16.0%` | `84.0%` | `0.0%` | `100.0%` |
+| `simple` | `79.0%` | `21.0%` | `82.0%` | `18.0%` |
+| `simple_direct` | `56.0%` | `44.0%` | `58.0%` | `42.0%` |
 
 ### Output layout
 
@@ -455,6 +455,8 @@ This script uses the balanced subset from step 4 and the cached assessment score
 - **Exact match**
 - **Harmful optimism (at-risk)**
 - **Warning preservation**
+- **Hard-case warning preservation** (JSON and CSV): predictions in
+  `{eher ablehnen, ablehnen}` among the 50 silver-`ablehnen` cases
 
 The bootstrap is designed to match the evaluation setup:
 
@@ -463,6 +465,11 @@ The bootstrap is designed to match the evaluation setup:
 - resampling is **stratified by silver label** so that the balanced 50/50/50 class design is preserved in every bootstrap sample
 
 By default, the script uses **10,000 bootstrap samples** and reports percentile intervals based on the 2.5th and 97.5th percentiles of the bootstrap distribution.
+
+Hard-case warning preservation uses the same paired resamples as the other
+metrics. At an observed rate of 0% or 100%, all resamples have the same outcome,
+so the percentile interval has zero width; this does not establish that the
+population rate is exactly 0% or 100%.
 
 ### Output layout
 
@@ -475,7 +482,9 @@ cache_experiments/
       summary.json
 ```
 
-- `label_metric_uncertainty.png` shows point estimates with 95% bootstrap confidence intervals for all three settings.
+- `label_metric_uncertainty.png` shows the original three metrics (exact match,
+  harmful optimism, and warning preservation) with 95% bootstrap confidence
+  intervals for all three settings.
 - `label_metric_uncertainty.csv` contains one row per metric and setting with point estimates, interval bounds, and bootstrap summary statistics.
 - `summary.json` stores the bootstrap design, per-mode results, and a ready-to-cite methods paragraph.
 
@@ -812,6 +821,24 @@ What it produces:
 - `validation_statistics_table.csv`: compact Friedman-test summary table
 - `validation_statistics_table_posthoc.csv`: pairwise Wilcoxon signed-rank post-hoc results
 - `validation_statistics.json`: detailed statistics including mixed-effects robustness checks
+
+The complexity heatmaps use vertically stacked panels on a 152 mm-wide canvas,
+with 12 pt axis/tick labels, 13 pt cell annotations, and 14 pt titles. Matching
+PDF and SVG files preserve vector text; PNG output defaults to 300 dpi. A
+`.caption.txt` file documents the metrics, thresholds, and sample sizes.
+Include the figure at 152 mm width to retain these print font sizes.
+
+Complexity labels use explicit, non-overlapping intervals from the sample
+manifest: low is `c ≤ 5` (Q1, 92 cases), medium is `5 < c ≤ 9` (Q2+Q3,
+33 cases), and high is `c > 9` (Q4, 25 cases) in the current 150-case sample.
+The earlier range notation was ambiguous; the underlying assignment already
+placed every `c = 5` case exclusively in the low group.
+
+To regenerate only these heatmaps from the cached scores:
+
+```powershell
+py -3.11 plot_output_validation_by_complexity.py --heatmap-only
+```
 
 The script aggregates at the planning-case level to avoid pseudo-replication, runs Friedman tests separately for clarity and coherence, applies Holm-corrected Wilcoxon post-hoc tests when appropriate, and adds an exploratory mixed-effects model using the numeric pipeline complexity score.
 
